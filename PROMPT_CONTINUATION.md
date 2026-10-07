@@ -30,7 +30,7 @@ Environnement : Home Assistant OS sur Raspberry Pi 5 (« HA2 »), Browser Mod, F
 - **Vue tablette** : l'add-on publie `sensor.taskmanager_fil_du_jour` (attribut `days`), affiché par une carte Markdown (`docs/dashboard-tablette.md`), pas d'iframe (HA en HTTPS).
 - **Réponse IA (V2)** : même structure que les boutons (`valeur`, `source`, `texte brut`) ; point d'entrée `POST /api/answer` déjà prêt.
 
-## État du code (v0.2.0)
+## État du code (v0.2.1)
 Backend Python/aiohttp dans `taskmanager/app/taskmanager/` (`engine.py` = cœur), interface sans build dans `taskmanager/app/web/`, tests dans `tests/` (`python -m pytest -q tests`, tous verts, faux HA). Jamais testé sur un vrai HA.
 
 ## À valider / à faire ensuite

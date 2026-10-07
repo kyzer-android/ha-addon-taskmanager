@@ -1,5 +1,5 @@
 name: "Gestionnaire de tâches"
-version: "0.2.0"
+version: "0.2.1"
 slug: taskmanager
 description: "Rappels vidéo/audio, questions OUI/NON et appels d'escalade sur tablettes murales"
 url: "https://github.com/kyzer-android/ha-addon-taskmanager"
@@ -21,6 +21,7 @@ homeassistant_api: true
 map:
   - addon_config:rw
   - media:ro
+  - homeassistant_config:rw
 options:
   log_level: info
 schema:

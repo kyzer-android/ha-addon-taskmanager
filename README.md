@@ -14,7 +14,7 @@ Détails d'utilisation : [`taskmanager/DOCS.md`](taskmanager/DOCS.md).
 
 ## État du projet
 
-Version **0.2.0** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
+Version **0.2.1** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
 
 | Fonction | État |
 |---|---|

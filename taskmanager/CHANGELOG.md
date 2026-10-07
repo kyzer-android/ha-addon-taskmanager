@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1
+- Accès en écriture à la configuration de Home Assistant (`homeassistant_config:rw`), nécessaire pour installer automatiquement la carte `taskmanager-card` dans `/config/www/taskmanager/`. Aucune étape manuelle.
+
 ## 0.2.0
 - Nouvelle carte Lovelace `custom:taskmanager-card` (style du dashboard des tablettes : bandeau vert, gros caractères, halo sur aujourd'hui, jours adaptés à la largeur). Installée et déclarée automatiquement par l'add-on (nécessite l'accès à la configuration de HA).
 - Configuration : paramètres généraux réorganisés par thème (Questions et lecture, Appels d'escalade, Sous-tâches, Vue tablette, Calendriers, Avancé), avec unités et aides ; état de la carte et YAML à copier.

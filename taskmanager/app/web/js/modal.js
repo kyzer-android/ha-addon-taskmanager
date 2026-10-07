@@ -6,7 +6,7 @@ import { entityPicker } from './picker.js';
  * options :
  *  - title    : titre de la popup
  *  - values   : valeurs initiales (copiées, l'original n'est modifié qu'à l'enregistrement)
- *  - fields   : [{ key, label, help, kind: 'text'|'entity'|'select'|'checkbox', required,
+ *  - fields   : [{ key, label, help, kind: 'text'|'entity'|'select'|'checkbox', required, showIf(values),
  *                  domains | domainsFor(values), allowEmpty, options: [{ value, label }], rerender }]
  *  - entities : liste des entités HA (pour les champs « entity »)
  *  - onSave   : (values) => void
@@ -60,13 +60,15 @@ export const openForm = ({ title, values, fields, entities, onSave }) => {
       errors.has(spec.key) ? h('span', { class: 'modal-error' }, 'Champ obligatoire') : null);
   };
 
+  const visible = () => fields.filter((spec) => !spec.showIf || spec.showIf(draft));
+
   function render() {
-    body.replaceChildren(...fields.map(fieldBlock));
+    body.replaceChildren(...visible().map(fieldBlock));
   }
 
   const save = () => {
     errors.clear();
-    fields.filter((spec) => spec.required && !String(draft[spec.key] || '').trim())
+    visible().filter((spec) => spec.required && !String(draft[spec.key] || '').trim())
       .forEach((spec) => errors.add(spec.key));
     if (errors.size) { render(); return; }
     onSave(draft);

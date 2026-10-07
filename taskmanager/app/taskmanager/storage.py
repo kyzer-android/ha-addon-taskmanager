@@ -91,8 +91,6 @@ class Storage:
         self.config = models.merge_config(raw)
         for room in self.config["rooms"]:
             room.setdefault("id", models.new_id("r"))
-        for person in self.config["caregivers"]:
-            person.setdefault("id", models.new_id("c"))
         for item in self.config["catalog"]:
             item.setdefault("id", models.new_id("e"))
         self.save_config()

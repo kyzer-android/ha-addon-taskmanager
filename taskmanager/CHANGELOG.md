@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+- **Utilisateurs** : la section « Aidants » devient « Utilisateurs » (compte Home Assistant choisi dans une liste, rôle Aidant ou Tablette, extension SIP pour les aidants). Les anciens aidants sont repris automatiquement.
+- **Rôles côté serveur** : un administrateur HA voit toujours l'interface complète ; un compte « Tablette » ne voit que le fil du jour, en lecture seule (le reste de l'API lui est refusé).
+- **Vue tablette** dans l'interface : nouvel onglet, et page plein écran pour les comptes « Tablette » (bandeau vert, gros caractères, jours adaptés à la largeur, rafraîchie toutes les 30 s).
+- **Image de fond** au choix (téléversement ou dossier média), mosaïque ou plein écran ; taille des caractères et largeur des jours réglables.
+- La carte Lovelace `taskmanager-card` est abandonnée, ainsi que l'accès en écriture à la configuration de HA (`homeassistant_config:rw` retiré).
+
 ## 0.2.1
 - Accès en écriture à la configuration de Home Assistant (`homeassistant_config:rw`), nécessaire pour installer automatiquement la carte `taskmanager-card` dans `/config/www/taskmanager/`. Aucune étape manuelle.
 

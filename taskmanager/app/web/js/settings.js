@@ -2,6 +2,7 @@ import { api } from './api.js';
 import { h, clear, field, toast } from './dom.js';
 import { entityChecklist, loadEntities } from './picker.js';
 import { openForm } from './modal.js';
+import { imagePicker } from './images.js';
 
 // Paramètres généraux regroupés par thème : chaque champ a une unité et une aide.
 const SETTING_GROUPS = [
@@ -45,6 +46,8 @@ const DOMAINS = {
 export const renderSettings = async (root) => {
   const config = await api.config();
   const entities = await loadEntities();
+  const usersReply = await api.users().catch(() => ({}));
+  const haUsers = { available: Boolean(usersReply.available), users: Array.isArray(usersReply.users) ? usersReply.users : [] };
   const page = h('div');
   root.append(page);
 
@@ -117,34 +120,58 @@ export const renderSettings = async (root) => {
       line('🚶', room.presence_sensor && nameOf(room.presence_sensor))],
     () => editRoom(room), () => removeRoom(room))), 'Aucune pièce : ajoutes-en une.');
 
-  // ---- Aidants ----
-  const editCaregiver = (person) => {
-    const isNew = !person;
+  // ---- Utilisateurs ----
+  const ROLES = [{ value: 'aidant', label: 'Aidant : interface complète, peut être appelé' },
+    { value: 'tablette', label: 'Tablette : vue simplifiée en lecture seule' }];
+  const ROLE_LABELS = { aidant: 'Aidant', tablette: 'Tablette' };
+  const haUserName = (id) => haUsers.users.find((user) => user.id === id)?.name;
+
+  const editUser = (user) => {
+    const isNew = !user;
+    const taken = new Set(config.users.filter((item) => item.id !== user?.id).map((item) => item.ha_user_id));
+    const accountField = haUsers.available
+      ? { key: 'ha_user_id', label: 'Compte Home Assistant', kind: 'select', required: true,
+        options: [{ value: '', label: '— choisir un compte —' },
+          ...haUsers.users.filter((account) => !taken.has(account.id) || account.id === user?.ha_user_id)
+            .map((account) => ({ value: account.id,
+              label: `${account.name} (${account.username || 'sans identifiant'})${account.is_admin ? ' — admin' : ''}` }))],
+        help: 'Le compte avec lequel la personne ouvre Home Assistant.' }
+      : { key: 'ha_user_id', label: 'Identifiant du compte Home Assistant', kind: 'text', required: true,
+        help: 'La liste des comptes est indisponible : saisis l\'identifiant interne du compte (Paramètres → Personnes → Utilisateurs).' };
     openForm({
-      title: isNew ? 'Ajouter un aidant' : `Modifier : ${person.name}`,
-      values: person || { id: makeId('c'), name: '', extension: '' },
+      title: isNew ? 'Ajouter un utilisateur' : `Modifier : ${user.name || 'utilisateur'}`,
+      values: user || { id: makeId('u'), ha_user_id: '', name: '', role: 'aidant', extension: '' },
       fields: [
-        { key: 'name', label: 'Nom de l\'aidant', kind: 'text', required: true, help: 'Par exemple : Mathieu.' },
+        accountField,
+        { key: 'role', label: 'Rôle', kind: 'select', options: ROLES, rerender: true,
+          help: 'Un administrateur de Home Assistant voit toujours l\'interface complète.' },
         { key: 'extension', label: 'Extension SIP à appeler', kind: 'text', required: true,
+          showIf: (values) => values.role === 'aidant',
           help: 'Par exemple : 100. C\'est l\'extension appelée en cas d\'escalade.' },
       ],
       entities,
       onSave: (values) => {
-        const index = config.caregivers.findIndex((item) => item.id === values.id);
-        if (index >= 0) config.caregivers[index] = values; else config.caregivers.push(values);
+        const next = { ...values, name: haUserName(values.ha_user_id) || values.name || values.ha_user_id };
+        if (next.role !== 'aidant') next.extension = '';
+        const index = config.users.findIndex((item) => item.id === next.id);
+        if (index >= 0) config.users[index] = next; else config.users.push(next);
         draw();
       },
     });
   };
 
-  const caregiversList = () => list(config.caregivers.map((person) => card(
-    person.name || 'Sans nom', [line('📞', person.extension && `extension ${person.extension}`)],
-    () => editCaregiver(person),
+  const usersList = () => list(config.users.map((user) => card(
+    [haUserName(user.ha_user_id) || user.name || 'Sans nom', ' ',
+      h('span', { class: 'badge' }, ROLE_LABELS[user.role] || user.role)],
+    [user.ha_user_id ? line('🔑', haUsers.users.find((item) => item.id === user.ha_user_id)?.username
+      || user.ha_user_id) : h('span', { class: 'badge badge-warning' }, '⚠️ Compte Home Assistant à choisir'),
+    line('📞', user.extension && `extension ${user.extension}`)],
+    () => editUser(user),
     () => {
-      if (!window.confirm(`Supprimer l'aidant « ${person.name} » ?`)) return;
-      config.caregivers = config.caregivers.filter((item) => item.id !== person.id);
+      if (!window.confirm(`Supprimer l'utilisateur « ${user.name} » ?`)) return;
+      config.users = config.users.filter((item) => item.id !== user.id);
       draw();
-    })), 'Aucun aidant : ajoutes-en un.');
+    })), 'Aucun utilisateur : tant que la liste est vide, tout le monde voit l\'interface complète.');
 
   // ---- Catalogue ----
   const CATALOG_TYPES = [{ value: 'presence', label: 'Capteur de présence' }, { value: 'sensor', label: 'Autre capteur' }];
@@ -199,25 +226,26 @@ export const renderSettings = async (root) => {
     group.hint ? h('p', { class: 'hint' }, group.hint) : null,
     h('div', { class: 'settings-grid' }, group.fields.map(settingField)));
 
-  const cardPanel = () => {
-    const status = h('p', { class: 'hint' }, 'Vérification…');
-    const yaml = h('pre', { class: 'code-box' });
-    const copy = h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
-      try { await navigator.clipboard.writeText(yaml.textContent); toast('Copié'); } catch (error) { toast('Copie impossible : sélectionne le texte'); }
-    } }, 'Copier');
-    api.card().then((info) => {
-      const icon = { ok: '✅', manual: '⚠️', error: '❌' }[info.resource] || '⏳';
-      status.textContent = `${icon} ${info.message || ''}`;
-      yaml.textContent = info.yaml || '';
-    }).catch(() => { status.textContent = '❌ État de la carte indisponible'; });
-    return h('section', { class: 'panel' },
-      h('h2', { class: 'panel-title' }, 'Vue tablette'),
-      h('p', { class: 'hint' }, 'L\'add-on installe la carte « Fil du jour » dans Home Assistant. Ajoute-la à un tableau de bord (carte personnalisée, ou vue de type « panneau » pour l\'afficher en plein écran).'),
-      h('div', { class: 'settings-grid' }, settingField({
-        key: 'days_published', label: 'Nombre de jours publiés', unit: 'jours',
-        help: 'Jours disponibles pour la carte. Elle en montre autant que la largeur de l\'écran le permet.' })),
-      status, yaml, copy);
-  };
+  const tabletPanel = () => h('section', { class: 'panel' },
+    h('h2', { class: 'panel-title' }, 'Vue tablette'),
+    h('p', { class: 'hint' }, 'Le fil du jour que voient les comptes « Tablette ». Aperçu dans l\'onglet « Vue tablette » (enregistre d\'abord).'),
+    h('div', { class: 'settings-grid' },
+      settingField({ key: 'days_published', label: 'Nombre de jours publiés', unit: 'jours',
+        help: 'La vue en montre autant que la largeur de l\'écran le permet.' }),
+      settingField({ key: 'tablet_min_day_width', label: 'Largeur minimale d\'un jour', unit: 'pixels',
+        help: 'Plus elle est grande, moins il y a de jours côte à côte.' }),
+      settingField({ key: 'tablet_font_scale', label: 'Taille des caractères', unit: '× (1 = 30 à 35 px)',
+        help: 'Par exemple 0,8 pour réduire, 1,2 pour agrandir.' }),
+      h('div', { class: 'modal-field' },
+        h('span', { class: 'modal-label' }, 'Affichage du fond'),
+        h('select', { class: 'modal-input', onchange: (event) => { config.settings.tablet_background_mode = event.target.value; } },
+          [{ value: 'tile', label: 'Mosaïque (motif répété)' }, { value: 'cover', label: 'Image remplissant l\'écran' }]
+            .map((option) => h('option', { value: option.value,
+              selected: (config.settings.tablet_background_mode || 'tile') === option.value }, option.label))))),
+    h('div', { class: 'modal-field' },
+      h('span', { class: 'modal-label' }, 'Image de fond'),
+      imagePicker({ value: config.settings.tablet_background,
+        onChange: (value) => { config.settings.tablet_background = value; } })));
 
   const calendarPanel = () => h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, 'Calendriers'),
@@ -246,17 +274,17 @@ export const renderSettings = async (root) => {
         roomsList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editRoom(null) }, '＋ Ajouter une pièce')),
       h('section', { class: 'panel' },
-        h('h2', { class: 'panel-title' }, 'Aidants'),
-        h('p', { class: 'hint' }, 'Seuls les aidants déclarés ici peuvent être appelés en cas d\'escalade.'),
-        caregiversList(),
-        h('button', { class: 'btn btn-secondary', onclick: () => editCaregiver(null) }, '＋ Ajouter un aidant')),
+        h('h2', { class: 'panel-title' }, 'Utilisateurs'),
+        h('p', { class: 'hint' }, 'Choisis les comptes Home Assistant et leur rôle. Seuls les aidants (avec une extension) peuvent être appelés en cas d\'escalade. Les administrateurs voient toujours l\'interface complète.'),
+        usersList(),
+        h('button', { class: 'btn btn-secondary', onclick: () => editUser(null) }, '＋ Ajouter un utilisateur')),
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Catalogue d\'entités'),
         h('p', { class: 'hint' }, 'Donne un nom parlant aux capteurs : présence (radar, onMotion Fully…) ou autres capteurs pour les sous-tâches.'),
         catalogList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editCatalogItem(null) }, '＋ Ajouter une entité')),
       ...SETTING_GROUPS.map(groupPanel),
-      cardPanel(),
+      tabletPanel(),
       calendarPanel(),
       advancedPanel(),
       h('div', { class: 'canvas-actions' }, h('span'), h('button', { class: 'btn', onclick: save }, 'Enregistrer la configuration')));

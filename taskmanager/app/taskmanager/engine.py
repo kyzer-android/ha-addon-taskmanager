@@ -458,7 +458,7 @@ class Engine:
         for room in self.config["rooms"]:
             if room.get("extension"):
                 names[str(room["extension"])] = {"name": room.get("name", "")}
-        for person in self.config["caregivers"]:
+        for person in models.caregivers(self.config):
             if person.get("extension"):
                 names[str(person["extension"])] = {"name": person.get("name", "")}
         return names
@@ -528,7 +528,7 @@ class Engine:
         return lasted >= float(self.settings.get("call_unanswered_seconds", 20))
 
     async def _escalate(self, escalation: dict[str, Any]) -> None:
-        people = [p for p in self.config["caregivers"] if p.get("id") in escalation.get("caregiver_ids", [])]
+        people = [p for p in models.caregivers(self.config) if p.get("id") in escalation.get("caregiver_ids", [])]
         if not people:
             self.log("warning", "Escalade demandée mais aucun aidant sélectionné")
             return

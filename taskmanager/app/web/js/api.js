@@ -13,7 +13,18 @@ export const api = {
   status: () => request('GET', 'api/status'),
   config: () => request('GET', 'api/config'),
   saveConfig: (config) => request('PUT', 'api/config', config),
-  card: () => request('GET', 'api/card'),
+  me: () => request('GET', 'api/me'),
+  users: () => request('GET', 'api/users'),
+  tablet: () => request('GET', 'api/tablet'),
+  images: () => request('GET', 'api/images'),
+  deleteImage: (name) => request('DELETE', `api/images/${encodeURIComponent(name)}`),
+  uploadImage: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch('api/images', { method: 'POST', body: form });
+    if (!response.ok) throw new Error(await response.text() || `Envoi refusé (${response.status})`);
+    return response.json();
+  },
   entities: () => request('GET', 'api/entities'),
   media: () => request('GET', 'api/media'),
   tasks: () => request('GET', 'api/tasks'),

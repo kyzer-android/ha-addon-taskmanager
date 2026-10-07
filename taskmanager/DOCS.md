@@ -13,7 +13,7 @@ Rappels vidéo ou audio sur les tablettes murales, questions OUI/NON avec répé
 ## Utilisation
 
 1. Ouvre **Tâches** dans la barre latérale de HA.
-2. Onglet **Configuration** : déclare les pièces (nom, extension SIP, lecteur, écran, capteur d'appel, Browser ID, capteur de présence), les aidants (nom + extension) et le catalogue d'entités.
+2. Onglet **Configuration** : déclare les pièces (nom, extension SIP, lecteur, écran, capteur d'appel, Browser ID, capteur de présence), les utilisateurs (compte Home Assistant, rôle aidant ou tablette, extension SIP des aidants) (ex-aidants : nom + extension) et le catalogue d'entités.
 3. Onglet **Créateur** : glisse les tuiles (Tâche, Question, Audio, Vidéo, Sous-tâche) ou touche-les sur téléphone, règle les jours et l'heure, puis crée la tâche.
 4. Onglet **Fil de la journée** : retrouve les tâches, masque-les (👁️), lance-les à la main pour tester.
 
@@ -29,7 +29,7 @@ Rappels vidéo ou audio sur les tablettes murales, questions OUI/NON avec répé
 
 ## Fil du jour pour la tablette
 
-Voir `docs/dashboard-tablette.md` dans le dépôt : l'add-on publie `sensor.taskmanager_fil_du_jour`, à afficher avec une carte Markdown.
+Les comptes déclarés « Tablette » voient une page plein écran en lecture seule (fil du jour, fond au choix). Voir `docs/vue-tablette.md` dans le dépôt.
 
 ## Points à valider sur une vraie installation
 

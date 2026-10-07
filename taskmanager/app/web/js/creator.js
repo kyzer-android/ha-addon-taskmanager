@@ -42,6 +42,7 @@ const newTask = () => ({
 
 export const renderCreator = async (root, context, show) => {
   const [config, media, entities] = await Promise.all([api.config(), api.media(), loadEntities()]);
+  const caregivers = config.users.filter((user) => user.role === 'aidant');
   let draft = context.editTask ? structuredClone(context.editTask) : null;
   const isEdit = Boolean(context.editTask);
   context.editTask = null;
@@ -146,7 +147,7 @@ export const renderCreator = async (root, context, show) => {
       } }),
       'Appeler si personne ne répond'),
     node.escalation.enabled ? h('div', { class: 'row' },
-      config.caregivers.length ? config.caregivers.map((person) => h('label', { class: 'row' },
+      caregivers.length ? caregivers.map((person) => h('label', { class: 'row' },
         h('input', { type: 'checkbox', checked: node.escalation.caregiver_ids.includes(person.id),
           onchange: (event) => {
             const ids = new Set(node.escalation.caregiver_ids);

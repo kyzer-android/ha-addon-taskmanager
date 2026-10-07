@@ -40,9 +40,9 @@ def test_task_lifecycle(engine):
 def test_config_roundtrip_and_static_index(engine):
     async def scenario(client):
         config = await (await client.get("/api/config")).json()
-        config["caregivers"].append({"name": "Nouvelle", "extension": "104"})
+        config["users"].append({"name": "Nouvelle", "extension": "104", "role": "aidant", "ha_user_id": "u9"})
         saved = await (await client.put("/api/config", json=config)).json()
-        assert saved["caregivers"][-1]["id"]
+        assert saved["users"][-1]["id"] and saved["users"][-1]["extension"] == "104"
         page = await client.get("/")
         assert page.status == 200 and "Gestionnaire de tâches" in await page.text()
         assert (await client.get("/js/app.js")).status == 200
@@ -90,9 +90,3 @@ def test_ingress_repeated_slashes(engine):
             assert (await client.get(path)).status == 200, path
     with_client(engine, scenario)
 
-
-def test_card_status_route(engine):
-    async def scenario(client):
-        data = await (await client.get("/api/card")).json()
-        assert data["resource"] == "unknown"
-    with_client(engine, scenario)

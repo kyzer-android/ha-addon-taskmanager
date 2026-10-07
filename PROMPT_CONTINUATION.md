@@ -27,10 +27,10 @@ Environnement : Home Assistant OS sur Raspberry Pi 5 (« HA2 »), Browser Mod, F
 - **Sous-tâches** : branches sur OUI / NON / aucune réponse / condition capteur (rejouer toutes les N minutes tant que le capteur a l'état voulu).
 - **Audio seul** : aucun popup, le son joue en arrière-plan.
 - **Calendrier Google** : les événements sont proposés dans l'écran de création ; je choisis ceux qui apparaissent dans le fil.
-- **Vue tablette** : l'add-on publie `sensor.taskmanager_fil_du_jour` (attribut `days`), affiché par une carte Markdown (`docs/dashboard-tablette.md`), pas d'iframe (HA en HTTPS).
+- **Vue tablette** : page de l'add-on (Ingress, `web/js/tablet.js`), pas de carte Lovelace. Rôle déduit du compte HA (en-tête `X-Remote-User-Id`, voir `access.py` et `docs/vue-tablette.md`) : admin/aidant = interface complète (+ onglet « Vue tablette »), compte « tablette » = vue plein écran en lecture seule. Utilisateurs (`config.users` : compte HA, rôle, extension) remplacent l'ancienne liste « aidants » (migration automatique). Fond d'écran choisi parmi les images téléversées (`/config/taskmanager/images`) ou `/media`. Le capteur `sensor.taskmanager_fil_du_jour` reste publié.
 - **Réponse IA (V2)** : même structure que les boutons (`valeur`, `source`, `texte brut`) ; point d'entrée `POST /api/answer` déjà prêt.
 
-## État du code (v0.2.1)
+## État du code (v0.3.0)
 Backend Python/aiohttp dans `taskmanager/app/taskmanager/` (`engine.py` = cœur), interface sans build dans `taskmanager/app/web/`, tests dans `tests/` (`python -m pytest -q tests`, tous verts, faux HA). Jamais testé sur un vrai HA.
 
 ## À valider / à faire ensuite

@@ -23,12 +23,20 @@ class FakeHa:
         self.play_seconds = 0.05
         self.call_seconds = 0.05
         self.published: list[tuple[str, str, dict[str, Any]]] = []
+        self.ha_users: list | None = [
+            {"id": "admin1", "name": "Admin", "username": "admin", "is_admin": True},
+            {"id": "u1", "name": "Mathieu", "username": "mathieu", "is_admin": False},
+            {"id": "tab1", "name": "Tablette salon", "username": "tablettesalon", "is_admin": False},
+            {"id": "other", "name": "Autre", "username": "autre", "is_admin": False}]
 
     def set(self, entity_id: str, state: str, **extra: Any) -> None:
         self.states[entity_id] = {"state": state, "last_changed": extra.pop("last_changed", None), **extra}
 
     def state(self, entity_id: str) -> str:
         return str((self.states.get(entity_id) or {}).get("state", "unknown"))
+
+    async def users(self):
+        return self.ha_users
 
     def entities(self):
         return [{"entity_id": k, "name": k, "state": v["state"]} for k, v in self.states.items()]
@@ -72,8 +80,8 @@ def make_config() -> dict[str, Any]:
              "browser_id": "tablette-chambre", "presence_sensor": "binary_sensor.presence_chambre"},
         ],
         "default_room_id": "salon",
-        "caregivers": [{"id": "c1", "name": "Mathieu", "extension": "100"},
-                       {"id": "c2", "name": "Shirley", "extension": "103"}],
+        "users": [{"id": "c1", "name": "Mathieu", "extension": "100", "role": "aidant", "ha_user_id": "u1"},
+                       {"id": "c2", "name": "Shirley", "extension": "103", "role": "aidant", "ha_user_id": "u2"}],
         "catalog": [],
         "settings": {"question_seconds": 0.2, "start_timeout_seconds": 2, "screen_wait_seconds": 0,
                      "call_unanswered_seconds": 0, "call_max_seconds": 5},

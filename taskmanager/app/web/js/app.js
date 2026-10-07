@@ -5,11 +5,14 @@ import { renderCreator } from './creator.js';
 import { renderArchive } from './archive.js';
 import { renderSettings } from './settings.js';
 import { renderJournal } from './journal.js';
+import { renderTablet } from './tablet.js';
+import { api } from './api.js';
 
 const pages = [
   { id: 'timeline', label: 'Fil de la journée', render: renderTimeline },
   { id: 'creator', label: 'Créateur', render: renderCreator },
   { id: 'archive', label: 'Archive', render: renderArchive },
+  { id: 'tablet', label: 'Vue tablette', render: renderTablet },
   { id: 'settings', label: 'Configuration', render: renderSettings },
   { id: 'journal', label: 'Journal', render: renderJournal },
 ];
@@ -31,13 +34,24 @@ const show = async (pageId) => {
   }
 };
 
-pages.forEach((page) => {
-  nav.append(h('button', {
-    class: 'app-nav-link',
-    'data-page': page.id,
-    onclick: () => show(page.id),
-  }, page.label));
-});
+const start = async () => {
+  let role = { full: true };
+  try { role = await api.me(); } catch (error) { /* interface complète par défaut */ }
+  if (!role.full) {
+    // Compte « tablette » : uniquement le fil du jour, sans navigation.
+    document.body.classList.add('is-tablet');
+    await renderTablet(main, context, show, { standalone: true });
+    return;
+  }
+  pages.forEach((page) => {
+    nav.append(h('button', {
+      class: 'app-nav-link',
+      'data-page': page.id,
+      onclick: () => show(page.id),
+    }, page.label));
+  });
+  loadEntities();
+  show('timeline');
+};
 
-loadEntities();
-show('timeline');
+start();

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Awaitable, Callable
 
 import aiohttp
@@ -114,6 +115,30 @@ class HaClient:
                     if not message.get("success"):
                         raise RuntimeError((message.get("error") or {}).get("message", "commande refusée"))
                     return message.get("result")
+
+    async def users(self) -> list[dict[str, Any]] | None:
+        """Comptes Home Assistant actifs (None si la liste est indisponible). Mis en cache 60 s."""
+        now = time.monotonic()
+        cached = getattr(self, "_users_cache", None)
+        if cached and now - cached[0] < 60:
+            return cached[1]
+        try:
+            raw = await self.ws_call("config/auth/list")
+            result: list[dict[str, Any]] | None = [
+                {
+                    "id": item["id"],
+                    "name": item.get("name") or item.get("username") or item["id"],
+                    "username": item.get("username") or "",
+                    "is_admin": bool(item.get("is_owner")) or "system-admin" in (item.get("group_ids") or []),
+                }
+                for item in raw
+                if item.get("is_active", True) and not item.get("system_generated")
+            ]
+        except Exception as err:  # noqa: BLE001 - on retombe sur la configuration de l'add-on
+            _LOGGER.warning("Liste des comptes HA indisponible (%s)", err)
+            result = None
+        self._users_cache = (now, result)
+        return result
 
     async def registry(self) -> dict[str, dict[str, Any]]:
         """Pièces et appareils des entités : {entity_id: {area, device}} (vide si indisponible)."""

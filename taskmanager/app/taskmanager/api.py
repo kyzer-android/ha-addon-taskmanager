@@ -5,13 +5,14 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 
-from . import __version__, models
+from . import __version__, access, models
 from .engine import Engine
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,6 +51,58 @@ async def ingress_only(request: web.Request, handler):
     return await handler(request)
 
 
+@web.middleware
+async def role_guard(request: web.Request, handler):
+    """Détermine le rôle du compte connecté ; un compte « tablette » ne peut que lire son fil."""
+    engine: Engine = request.app["engine"]
+    role = await access.resolve_role(engine, request.headers.get("X-Remote-User-Id", ""))
+    request["role"] = role
+    if role == access.TABLET and not access.tablet_may(request.method, request.path):
+        return web.json_response({"error": "forbidden"}, status=403)
+    return await handler(request)
+
+
+IMAGE_EXT = {"jpg", "jpeg", "png", "webp", "gif"}
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+
+def image_roots(engine: Engine) -> dict[str, Path]:
+    return {"upload": engine.storage.dir / "images", "media": Path(engine.media_dir)}
+
+
+def safe_image(root: Path, name: str) -> Path | None:
+    """Chemin d'une image dans `root`, ou None (extension non permise, sortie du dossier, absent)."""
+    try:
+        path = (root / name).resolve()
+        path.relative_to(root.resolve())
+    except (ValueError, OSError):
+        return None
+    if path.suffix.lower().lstrip(".") not in IMAGE_EXT or not path.is_file():
+        return None
+    return path
+
+
+def list_images(engine: Engine) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for source, root in image_roots(engine).items():
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*") if source == "media" else root.glob("*")):
+            if path.is_file() and path.suffix.lower().lstrip(".") in IMAGE_EXT:
+                rel = path.relative_to(root).as_posix()
+                items.append({"source": source, "name": rel, "value": f"{source}:{rel}",
+                              "url": f"api/image/{source}/{rel}"})
+        if len(items) > 300:
+            break
+    return items[:300]
+
+
+def background_url(settings: dict[str, Any]) -> str:
+    value = str(settings.get("tablet_background") or "")
+    source, _, name = value.partition(":")
+    return f"api/image/{source}/{name}" if source in ("upload", "media") and name else ""
+
+
 def list_media(media_dir: str) -> list[dict[str, str]]:
     root = Path(media_dir)
     files: list[dict[str, str]] = []
@@ -73,8 +126,9 @@ def event_key(entity_id: str, start: str, summary: str) -> str:
     return f"{entity_id}|{start}|{summary}"
 
 
-def build_app(engine: Engine, web_dir: str | Path, card_status: dict[str, Any] | None = None) -> web.Application:
-    app = IngressApplication(middlewares=[ingress_only])
+def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
+    app = IngressApplication(middlewares=[ingress_only, role_guard])
+    app["engine"] = engine
     storage = engine.storage
     routes = web.RouteTableDef()
 
@@ -96,9 +150,79 @@ def build_app(engine: Engine, web_dir: str | Path, card_status: dict[str, Any] |
             "now": engine.now().isoformat(timespec="seconds"),
         })
 
-    @routes.get("/api/card")
-    async def card(_: web.Request) -> web.Response:
-        return web.json_response(card_status or {"resource": "unknown", "message": "", "yaml": "", "file": False})
+    @routes.get("/api/me")
+    async def me(request: web.Request) -> web.Response:
+        role = request["role"]
+        return web.json_response({"role": role, "full": access.is_full(role)})
+
+    @routes.get("/api/users")
+    async def ha_users(_: web.Request) -> web.Response:
+        users = await engine.ha.users() if hasattr(engine.ha, "users") else None
+        return web.json_response({"available": users is not None, "users": users or []})
+
+    @routes.get("/api/tablet")
+    async def tablet(_: web.Request) -> web.Response:
+        from . import schedule
+        settings = storage.config["settings"]
+        return web.json_response({
+            "days": schedule.build_board(storage.tasks, storage.config["shown_events"],
+                                         engine.now().date(), int(settings["days_published"])),
+            "settings": {
+                "background_url": background_url(settings),
+                "background_mode": settings.get("tablet_background_mode", "tile"),
+                "font_scale": settings.get("tablet_font_scale", 1.0),
+                "min_day_width": settings.get("tablet_min_day_width", 360),
+            },
+            "now": engine.now().isoformat(timespec="seconds"),
+        })
+
+    @routes.get("/api/images")
+    async def images(_: web.Request) -> web.Response:
+        return web.json_response(list_images(engine))
+
+    @routes.get("/api/image/{source}/{name:.+}")
+    async def image(request: web.Request) -> web.StreamResponse:
+        root = image_roots(engine).get(request.match_info["source"])
+        path = safe_image(root, request.match_info["name"]) if root else None
+        if path is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(path)
+
+    @routes.post("/api/images")
+    async def upload_image(request: web.Request) -> web.Response:
+        reader = await request.multipart()
+        part = await reader.next()
+        if part is None or part.name != "file" or not part.filename:
+            raise web.HTTPBadRequest(text="Fichier manquant")
+        clean = re.sub(r"[^\w.\-]", "_", Path(part.filename).name) or "image"
+        if clean.rsplit(".", 1)[-1].lower() not in IMAGE_EXT:
+            raise web.HTTPBadRequest(text="Format d'image non pris en charge (jpg, png, webp, gif)")
+        root = image_roots(engine)["upload"]
+        root.mkdir(parents=True, exist_ok=True)
+        target = root / clean
+        counter = 1
+        while target.exists():
+            target = root / f"{Path(clean).stem}-{counter}{Path(clean).suffix}"
+            counter += 1
+        size = 0
+        with target.open("wb") as handle:
+            while chunk := await part.read_chunk():
+                size += len(chunk)
+                if size > MAX_IMAGE_BYTES:
+                    handle.close()
+                    target.unlink(missing_ok=True)
+                    raise web.HTTPRequestEntityTooLarge(max_size=MAX_IMAGE_BYTES, actual_size=size)
+                handle.write(chunk)
+        return web.json_response({"source": "upload", "name": target.name, "value": f"upload:{target.name}",
+                                  "url": f"api/image/upload/{target.name}"})
+
+    @routes.delete("/api/images/{name:.+}")
+    async def delete_image(request: web.Request) -> web.Response:
+        path = safe_image(image_roots(engine)["upload"], request.match_info["name"])
+        if path is None:
+            raise web.HTTPNotFound()
+        path.unlink()
+        return web.json_response({"ok": True})
 
     @routes.get("/api/config")
     async def get_config(_: web.Request) -> web.Response:

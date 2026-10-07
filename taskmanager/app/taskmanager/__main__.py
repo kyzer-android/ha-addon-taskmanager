@@ -11,7 +11,6 @@ import aiohttp
 from aiohttp import web
 
 from .api import build_app
-from .card import CardInstaller
 from .engine import Engine
 from .ha_client import HaClient
 from .storage import Storage
@@ -29,8 +28,6 @@ async def main() -> None:
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     base_url = os.environ.get("TM_HA_URL", "http://supervisor/core")
     web_dir = Path(__file__).resolve().parent.parent / "web"
-    card_source = Path(__file__).resolve().parent.parent / "card" / "taskmanager-card.js"
-    www_dir = Path(os.environ.get("TM_WWW_DIR", "/homeassistant/www/taskmanager"))
 
     async with aiohttp.ClientSession() as session:
         storage = Storage(data_dir)
@@ -38,16 +35,13 @@ async def main() -> None:
         engine = Engine(storage, ha, media_dir)
         ha.start()
         await engine.start()
-        card = CardInstaller(ha, card_source, www_dir)
-        card_task = asyncio.create_task(card.run(), name="card-install")
-        runner = web.AppRunner(build_app(engine, web_dir, card.status))
+        runner = web.AppRunner(build_app(engine, web_dir))
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", PORT).start()
         logging.getLogger(__name__).info("Interface disponible sur le port %s", PORT)
         try:
             await asyncio.Event().wait()
         finally:
-            card_task.cancel()
             await engine.stop()
             await ha.stop()
             await runner.cleanup()

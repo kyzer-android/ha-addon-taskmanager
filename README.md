@@ -14,18 +14,18 @@ Détails d'utilisation : [`taskmanager/DOCS.md`](taskmanager/DOCS.md).
 
 ## État du projet
 
-Version **0.2.1** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
+Version **0.3.0** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
 
 | Fonction | État |
 |---|---|
-| Pièces, tablettes et aidants en paramètres (aucun nom en dur) | ✅ |
+| Pièces, tablettes et utilisateurs en paramètres (aucun nom en dur) | ✅ |
 | Tâches journalières ou uniques, archive, visibilité 👁️ | ✅ |
 | Vidéo, audio, question OUI/NON, répétitions, sous-tâches (OUI, NON, sans réponse, capteur) | ✅ |
 | Choix de la pièce (présence la plus récente, sinon toutes les tablettes) | ✅ |
 | Écran allumé seulement s'il est éteint | ✅ |
 | Appels entrants (ferme la vidéo, Call Card plein écran) et appel d'escalade | ✅ (à valider sur la vraie installation) |
 | Interface de gestion (Ingress) avec créateur à tuiles | ✅ |
-| Fil du jour pour la tablette (`sensor.taskmanager_fil_du_jour`) | ✅ voir [`docs/dashboard-tablette.md`](docs/dashboard-tablette.md) |
+| Vue tablette (page de l'add-on, fond au choix, jours adaptés à la largeur) et rôles aidant / tablette | ✅ voir [`docs/vue-tablette.md`](docs/vue-tablette.md) |
 | Réponse vocale par IA | ⏳ V2 (point d'entrée `POST /api/answer` déjà prêt) |
 
 **Pas encore testé sur un vrai Home Assistant** : la logique est couverte par des tests automatiques avec un faux HA, mais les détails Browser Mod / SIP Core restent à valider (voir « Points à valider »).

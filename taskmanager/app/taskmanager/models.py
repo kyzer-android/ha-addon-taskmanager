@@ -32,6 +32,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "sensor_loop_max_runs": 24,
     "days_published": 4,
     "grace_minutes": 5,
+    "tablet_background": "",
+    "tablet_background_mode": "tile",
+    "tablet_font_scale": 1.0,
+    "tablet_min_day_width": 360,
     "video_style": DEFAULT_VIDEO_STYLE,
     "calendar_entities": [],
 }
@@ -39,12 +43,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 DEFAULT_CONFIG: dict[str, Any] = {
     "rooms": [],
     "default_room_id": "",
-    "caregivers": [],
+    "users": [],
     "catalog": [],
     "settings": copy.deepcopy(DEFAULT_SETTINGS),
     "shown_events": [],
 }
 
+USER_ROLES = ("aidant", "tablette")
 TRIGGERS = ("yes", "no", "no_answer", "sensor")
 MEDIA_KINDS = ("video", "audio", "none")
 SCHEDULE_TYPES = ("daily", "once")
@@ -150,11 +155,31 @@ def clean_task(task: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def clean_user(raw: dict[str, Any]) -> dict[str, Any]:
+    """Un utilisateur : compte HA + rôle (aidant ou tablette) + extension SIP (aidant)."""
+    role = raw.get("role") if raw.get("role") in USER_ROLES else "aidant"
+    return {
+        "id": str(raw.get("id") or new_id("u")),
+        "ha_user_id": str(raw.get("ha_user_id") or ""),
+        "name": str(raw.get("name") or ""),
+        "role": role,
+        "extension": str(raw.get("extension") or "") if role == "aidant" else "",
+    }
+
+
+def caregivers(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Utilisateurs appelables en escalade."""
+    return [user for user in config.get("users", []) if user.get("role") == "aidant"]
+
+
 def merge_config(raw: dict[str, Any]) -> dict[str, Any]:
     """Complète une configuration lue sur disque avec les valeurs par défaut."""
     config = copy.deepcopy(DEFAULT_CONFIG)
-    for key in ("rooms", "caregivers", "catalog", "shown_events"):
+    for key in ("rooms", "catalog", "shown_events"):
         config[key] = list(raw.get(key) or [])
+    # Reprise de l'ancienne liste « aidants » : mêmes identifiants, donc les tâches restent valides.
+    legacy = [{**person, "role": "aidant"} for person in (raw.get("caregivers") or [])]
+    config["users"] = [clean_user(user) for user in (raw.get("users") or legacy)]
     config["default_room_id"] = str(raw.get("default_room_id") or "")
     config["settings"].update(raw.get("settings") or {})
     return config

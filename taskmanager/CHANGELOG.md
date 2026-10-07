@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+- Sélecteurs d'entités refaits sur le modèle de HA : icône, nom, appareil · pièce, identifiant, regroupement par pièce, recherche approximative (accents ignorés, plusieurs mots). Le panneau n'est plus coupé par les tableaux.
+- `/api/entities` ajoute la pièce et l'appareil (registres HA via WebSocket).
+
 ## 0.1.3
 - Configuration : tous les champs d'entités (lecteur, écran, capteurs d'appel et de présence, catalogue, capteur de sous-tâche, calendriers) sont des listes de sélection avec recherche, filtrées par domaine. Une entité enregistrée mais disparue est signalée en rouge « introuvable ».
 - Le Browser ID reste en saisie libre (aucune API HA fiable pour le lister).

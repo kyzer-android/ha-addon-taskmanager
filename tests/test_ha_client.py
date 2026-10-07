@@ -71,3 +71,38 @@ def test_rest_and_websocket_events():
                 assert sent[0] == ("media_player", "media_stop", {"entity_id": "media_player.x"})
                 assert sent[1][0] == "state" and sent[1][1] == "sensor.demo"
     asyncio.run(scenario())
+
+
+def test_registry_gives_area_and_device():
+    async def websocket(request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.send_json({"type": "auth_required"})
+        await ws.receive_json()
+        await ws.send_json({"type": "auth_ok"})
+        results = {
+            "config/entity_registry/list": [
+                {"entity_id": "media_player.salon", "device_id": "d1", "area_id": None},
+                {"entity_id": "light.lampe", "device_id": None, "area_id": "a2"}],
+            "config/device_registry/list": [{"id": "d1", "name": "Tablette", "name_by_user": None, "area_id": "a1"}],
+            "config/area_registry/list": [{"area_id": "a1", "name": "Salon"}, {"area_id": "a2", "name": "Chambre"}],
+        }
+        for _ in range(3):
+            message = await ws.receive_json()
+            await ws.send_json({"id": message["id"], "type": "result", "success": True, "result": results[message["type"]]})
+        await asyncio.sleep(0.1)
+        return ws
+
+    async def scenario():
+        app = web.Application()
+        app.router.add_get("/websocket", websocket)
+        async with TestServer(app) as server:
+            async with aiohttp.ClientSession() as session:
+                client = HaClient(session, "secret", str(server.make_url("")).rstrip("/"))
+                info = await client.registry()
+                assert info["media_player.salon"] == {"area": "Salon", "device": "Tablette"}
+                assert info["light.lampe"] == {"area": "Chambre", "device": ""}
+                broken = HaClient(session, "secret", "http://127.0.0.1:1")
+                assert await broken.registry() == {}
+
+    asyncio.run(scenario())

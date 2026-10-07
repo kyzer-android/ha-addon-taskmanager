@@ -108,7 +108,13 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     @routes.get("/api/entities")
     async def entities(request: web.Request) -> web.Response:
         prefix = request.query.get("domain", "")
-        items = [e for e in engine.ha.entities() if e["entity_id"].startswith(prefix)]
+        registry = await engine.ha.registry() if hasattr(engine.ha, "registry") else {}
+        items = []
+        for entity in engine.ha.entities():
+            if not entity["entity_id"].startswith(prefix):
+                continue
+            extra = registry.get(entity["entity_id"], {})
+            items.append({**entity, "area": extra.get("area", ""), "device": extra.get("device", "")})
         return web.json_response(items)
 
     @routes.get("/api/media")

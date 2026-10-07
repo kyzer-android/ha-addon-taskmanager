@@ -80,6 +80,45 @@ class HaClient:
             key=lambda e: e["entity_id"],
         )
 
+    async def ws_commands(self, types: list[str]) -> dict[str, Any]:
+        """Envoie des commandes WebSocket ponctuelles (registres) et renvoie les résultats par type."""
+        results: dict[str, Any] = {}
+        async with self.session.ws_connect(self.ws_url, heartbeat=30) as ws:
+            await ws.receive_json()
+            await ws.send_json({"type": "auth", "access_token": self.token})
+            reply = await ws.receive_json()
+            if reply.get("type") != "auth_ok":
+                raise RuntimeError(f"Authentification refusée : {reply}")
+            for index, kind in enumerate(types, start=1):
+                await ws.send_json({"id": index, "type": kind})
+            pending = {index: kind for index, kind in enumerate(types, start=1)}
+            while pending:
+                message = await asyncio.wait_for(ws.receive_json(), timeout=15)
+                if message.get("type") == "result" and message.get("id") in pending:
+                    kind = pending.pop(message["id"])
+                    results[kind] = message.get("result") if message.get("success") else []
+        return results
+
+    async def registry(self) -> dict[str, dict[str, Any]]:
+        """Pièces et appareils des entités : {entity_id: {area, device}} (vide si indisponible)."""
+        try:
+            data = await self.ws_commands([
+                "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list"])
+        except Exception as err:  # noqa: BLE001 - la liste reste utilisable sans pièces
+            _LOGGER.warning("Registres HA indisponibles (%s)", err)
+            return {}
+        areas = {a["area_id"]: a.get("name", "") for a in data.get("config/area_registry/list", [])}
+        devices = {d["id"]: d for d in data.get("config/device_registry/list", [])}
+        info: dict[str, dict[str, Any]] = {}
+        for entry in data.get("config/entity_registry/list", []):
+            device = devices.get(entry.get("device_id") or "", {})
+            area_id = entry.get("area_id") or device.get("area_id")
+            info[entry["entity_id"]] = {
+                "area": areas.get(area_id, "") if area_id else "",
+                "device": device.get("name_by_user") or device.get("name") or "",
+            }
+        return info
+
     # ---- WebSocket ------------------------------------------------------------
     def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="ha-websocket")

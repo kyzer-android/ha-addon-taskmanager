@@ -195,7 +195,7 @@ export const entityPicker = ({ entities, domains, value, onChange, pinned = [], 
   });
   search.addEventListener('input', fill);
   search.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') close();
+    if (event.key === 'Escape') { event.stopPropagation(); close(); }
     if (event.key === 'Enter') {
       event.preventDefault();
       list.querySelector('.picker-option:not(.picker-none)')?.click();

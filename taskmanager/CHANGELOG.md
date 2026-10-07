@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+- Configuration : pièces, aidants et catalogue passent en cartes (Modifier / Supprimer). « Ajouter » et « Modifier » ouvrent une popup avec tous les champs les uns sous les autres, une aide sous chaque libellé et une validation des champs obligatoires.
+- Libellés clarifiés (Lecteur de la tablette, Écran de la tablette, État d'appel de la tablette, Extension SIP, Identifiant du navigateur, Détecteur de présence, Tablette par défaut).
+
 ## 0.1.4
 - Sélecteurs d'entités refaits sur le modèle de HA : icône, nom, appareil · pièce, identifiant, regroupement par pièce, recherche approximative (accents ignorés, plusieurs mots). Le panneau n'est plus coupé par les tableaux.
 - `/api/entities` ajoute la pièce et l'appareil (registres HA via WebSocket).

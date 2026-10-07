@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { h, clear, field, toast } from './dom.js';
-import { entityPicker, entityChecklist, loadEntities } from './picker.js';
+import { entityChecklist, loadEntities } from './picker.js';
+import { openForm } from './modal.js';
 
 const NUMBER_SETTINGS = [
   ['question_seconds', 'Durée d\'affichage d\'une question (secondes)'],
@@ -32,53 +33,139 @@ const textInput = (object, key, listId) => h('input', {
 export const renderSettings = async (root) => {
   const config = await api.config();
   const entities = await loadEntities();
-  const picker = (object, key, domains, extra = {}) => entityPicker({
-    entities, domains, value: object[key], allowEmpty: Boolean(extra.allowEmpty),
-    onChange: (entityId) => { object[key] = entityId; },
-  });
   const page = h('div');
   root.append(page);
 
-  const roomsTable = () => h('div', { class: 'table-wrap' }, h('table', { class: 'data-table' },
-    h('thead', {}, h('tr', {}, ['Pièce', 'Extension SIP', 'Lecteur (media_player)', 'Écran', 'Capteur d\'appel',
-      'Browser ID', 'Capteur de présence', 'Par défaut', ''].map((label) => h('th', {}, label)))),
-    h('tbody', {}, config.rooms.map((room, index) => h('tr', {},
-      h('td', {}, textInput(room, 'name')),
-      h('td', {}, textInput(room, 'extension')),
-      h('td', {}, picker(room, 'media_player', DOMAINS.media)),
-      h('td', {}, picker(room, 'screen', DOMAINS.screen)),
-      h('td', {}, picker(room, 'call_sensor', DOMAINS.callSensor)),
-      h('td', {}, textInput(room, 'browser_id')),
-      h('td', {}, picker(room, 'presence_sensor', DOMAINS.presence, { allowEmpty: true })),
-      h('td', {}, h('input', { type: 'radio', name: 'defaultRoom', checked: config.default_room_id === room.id,
-        onchange: () => { config.default_room_id = room.id; } })),
-      h('td', {}, h('button', { class: 'btn btn-danger btn-small', onclick: () => {
-        config.rooms.splice(index, 1);
-        draw();
-      } }, '✕')))))));
+  const nameOf = (id) => {
+    const entity = entities.find((item) => item.entity_id === id);
+    return entity ? `${entity.name} (${id})` : id;
+  };
+  const line = (icon, text) => (text ? h('span', { class: 'config-card-line' }, `${icon} ${text}`) : null);
 
-  const caregiversTable = () => h('div', { class: 'table-wrap' }, h('table', { class: 'data-table' },
-    h('thead', {}, h('tr', {}, ['Nom', 'Extension SIP', ''].map((label) => h('th', {}, label)))),
-    h('tbody', {}, config.caregivers.map((person, index) => h('tr', {},
-      h('td', {}, textInput(person, 'name')),
-      h('td', {}, textInput(person, 'extension')),
-      h('td', {}, h('button', { class: 'btn btn-danger btn-small', onclick: () => {
-        config.caregivers.splice(index, 1);
-        draw();
-      } }, '✕')))))));
+  // Carte d'un élément de configuration avec ses boutons Modifier / Supprimer.
+  const card = (title, lines, onEdit, onDelete) => h('div', { class: 'config-card' },
+    h('div', { class: 'config-card-main' }, h('span', { class: 'config-card-title' }, title), lines),
+    h('div', { class: 'config-card-actions' },
+      h('button', { class: 'btn btn-secondary btn-small', onclick: onEdit }, 'Modifier'),
+      h('button', { class: 'btn btn-danger btn-small', onclick: onDelete }, 'Supprimer')));
 
-  const catalogTable = () => h('div', { class: 'table-wrap' }, h('table', { class: 'data-table' },
-    h('thead', {}, h('tr', {}, ['Entité HA', 'Nom parlant', 'Type', ''].map((label) => h('th', {}, label)))),
-    h('tbody', {}, config.catalog.map((item, index) => h('tr', {},
-      h('td', {}, picker(item, 'entity_id', item.type === 'presence' ? DOMAINS.presence : DOMAINS.other)),
-      h('td', {}, textInput(item, 'name')),
-      h('td', {}, h('select', { onchange: (event) => { item.type = event.target.value; draw(); } },
-        h('option', { value: 'presence', selected: item.type === 'presence' }, 'Capteur de présence'),
-        h('option', { value: 'sensor', selected: item.type !== 'presence' }, 'Autre capteur'))),
-      h('td', {}, h('button', { class: 'btn btn-danger btn-small', onclick: () => {
-        config.catalog.splice(index, 1);
+  const list = (items, empty) => (items.length
+    ? h('div', { class: 'config-list' }, items)
+    : h('p', { class: 'config-empty' }, empty));
+
+  // ---- Pièces ----
+  const ROOM_FIELDS = [
+    { key: 'name', label: 'Nom de la pièce', help: 'Par exemple : Salon, Chambre.', kind: 'text', required: true },
+    { key: 'media_player', label: 'Lecteur de la tablette', kind: 'entity', domains: DOMAINS.media, required: true,
+      help: 'Le lecteur média (media_player) qui joue les vidéos et les sons sur cette tablette.' },
+    { key: 'screen', label: 'Écran de la tablette', kind: 'entity', domains: DOMAINS.screen, allowEmpty: true,
+      help: 'L\'entité qui allume l\'écran, souvent « … Screen ». Sans elle, l\'écran n\'est pas allumé avant une lecture.' },
+    { key: 'call_sensor', label: 'État d\'appel de la tablette', kind: 'entity', domains: DOMAINS.callSensor, allowEmpty: true,
+      help: 'Le capteur de l\'extension SIP : il passe à « Busy » quand la tablette est en appel.' },
+    { key: 'extension', label: 'Extension SIP de la tablette', kind: 'text', help: 'Par exemple : 102. Sert à appeler cette tablette en cas d\'escalade.' },
+    { key: 'browser_id', label: 'Identifiant du navigateur (Browser ID)', kind: 'text',
+      help: 'L\'identifiant Browser Mod de cette tablette, pour y ouvrir les fenêtres plein écran.' },
+    { key: 'presence_sensor', label: 'Détecteur de présence', kind: 'entity', domains: DOMAINS.presence, allowEmpty: true,
+      help: 'Facultatif : radar ou capteur de mouvement de cette pièce.' },
+    { key: 'is_default', label: 'Tablette par défaut', kind: 'checkbox',
+      help: 'Utilisée pour les appels quand personne n\'est détecté.' },
+  ];
+
+  const editRoom = (room) => {
+    const isNew = !room;
+    const base = room || { id: makeId('r'), name: '', extension: '', media_player: '', screen: '',
+      call_sensor: '', browser_id: '', presence_sensor: '' };
+    openForm({
+      title: isNew ? 'Ajouter une pièce' : `Modifier : ${base.name}`,
+      values: { ...base, is_default: config.default_room_id === base.id },
+      fields: ROOM_FIELDS, entities,
+      onSave: ({ is_default: isDefault, ...values }) => {
+        const index = config.rooms.findIndex((item) => item.id === values.id);
+        if (index >= 0) config.rooms[index] = values; else config.rooms.push(values);
+        if (isDefault) config.default_room_id = values.id;
+        else if (config.default_room_id === values.id) config.default_room_id = '';
         draw();
-      } }, '✕')))))));
+      },
+    });
+  };
+
+  const removeRoom = (room) => {
+    if (!window.confirm(`Supprimer la pièce « ${room.name} » ?`)) return;
+    config.rooms = config.rooms.filter((item) => item.id !== room.id);
+    if (config.default_room_id === room.id) config.default_room_id = '';
+    draw();
+  };
+
+  const roomsList = () => list(config.rooms.map((room) => card(
+    `${room.name || 'Sans nom'}${config.default_room_id === room.id ? ' ⭐ tablette par défaut' : ''}`,
+    [line('🎬', room.media_player && nameOf(room.media_player)), line('💡', room.screen && nameOf(room.screen)),
+      line('📞', [room.extension && `extension ${room.extension}`, room.call_sensor && nameOf(room.call_sensor)]
+        .filter(Boolean).join(' — ')),
+      line('🌐', room.browser_id && `Browser ID : ${room.browser_id}`),
+      line('🚶', room.presence_sensor && nameOf(room.presence_sensor))],
+    () => editRoom(room), () => removeRoom(room))), 'Aucune pièce : ajoutes-en une.');
+
+  // ---- Aidants ----
+  const editCaregiver = (person) => {
+    const isNew = !person;
+    openForm({
+      title: isNew ? 'Ajouter un aidant' : `Modifier : ${person.name}`,
+      values: person || { id: makeId('c'), name: '', extension: '' },
+      fields: [
+        { key: 'name', label: 'Nom de l\'aidant', kind: 'text', required: true, help: 'Par exemple : Mathieu.' },
+        { key: 'extension', label: 'Extension SIP à appeler', kind: 'text', required: true,
+          help: 'Par exemple : 100. C\'est l\'extension appelée en cas d\'escalade.' },
+      ],
+      entities,
+      onSave: (values) => {
+        const index = config.caregivers.findIndex((item) => item.id === values.id);
+        if (index >= 0) config.caregivers[index] = values; else config.caregivers.push(values);
+        draw();
+      },
+    });
+  };
+
+  const caregiversList = () => list(config.caregivers.map((person) => card(
+    person.name || 'Sans nom', [line('📞', person.extension && `extension ${person.extension}`)],
+    () => editCaregiver(person),
+    () => {
+      if (!window.confirm(`Supprimer l'aidant « ${person.name} » ?`)) return;
+      config.caregivers = config.caregivers.filter((item) => item.id !== person.id);
+      draw();
+    })), 'Aucun aidant : ajoutes-en un.');
+
+  // ---- Catalogue ----
+  const CATALOG_TYPES = [{ value: 'presence', label: 'Capteur de présence' }, { value: 'sensor', label: 'Autre capteur' }];
+  const editCatalogItem = (item) => {
+    const isNew = !item;
+    openForm({
+      title: isNew ? 'Ajouter une entité au catalogue' : `Modifier : ${item.name}`,
+      values: item || { id: makeId('e'), entity_id: '', name: '', type: 'presence' },
+      fields: [
+        { key: 'type', label: 'Type', kind: 'select', options: CATALOG_TYPES, rerender: true,
+          help: 'Présence : radar, onMotion Fully… Autre capteur : sert de condition pour une sous-tâche.' },
+        { key: 'entity_id', label: 'Entité Home Assistant', kind: 'entity', required: true,
+          domainsFor: (values) => (values.type === 'presence' ? DOMAINS.presence : DOMAINS.other) },
+        { key: 'name', label: 'Nom parlant', kind: 'text', required: true, help: 'Par exemple : Présence lit.' },
+      ],
+      entities,
+      onSave: (values) => {
+        const index = config.catalog.findIndex((entry) => entry.id === values.id);
+        if (index >= 0) config.catalog[index] = values; else config.catalog.push(values);
+        draw();
+      },
+    });
+  };
+
+  const catalogList = () => list(config.catalog.map((item) => card(
+    item.name || 'Sans nom',
+    [line('🏷️', CATALOG_TYPES.find((type) => type.value === item.type)?.label), line('📡', nameOf(item.entity_id))],
+    () => editCatalogItem(item),
+    () => {
+      if (!window.confirm(`Retirer « ${item.name} » du catalogue ?`)) return;
+      config.catalog = config.catalog.filter((entry) => entry.id !== item.id);
+      draw();
+    })), 'Catalogue vide : ajoutes-y des capteurs.');
 
   const settingsForm = () => {
     const settings = config.settings;
@@ -109,29 +196,19 @@ export const renderSettings = async (root) => {
     page.append(
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Pièces et tablettes'),
-        h('p', { class: 'hint' }, 'Une tablette par pièce. Rien n\'est écrit en dur : ajoute, modifie ou supprime à volonté.'),
-        roomsTable(),
-        h('button', { class: 'btn btn-secondary', onclick: () => {
-          config.rooms.push({ id: makeId('r'), name: '', extension: '', media_player: '', screen: '',
-            call_sensor: '', browser_id: '', presence_sensor: '' });
-          draw();
-        } }, '＋ Ajouter une pièce')),
+        h('p', { class: 'hint' }, 'Une tablette par pièce. Rien n\'est écrit en dur : ajoute, modifie ou supprime à volonté. N\'oublie pas d\'enregistrer en bas de page.'),
+        roomsList(),
+        h('button', { class: 'btn btn-secondary', onclick: () => editRoom(null) }, '＋ Ajouter une pièce')),
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Aidants'),
         h('p', { class: 'hint' }, 'Seuls les aidants déclarés ici peuvent être appelés en cas d\'escalade.'),
-        caregiversTable(),
-        h('button', { class: 'btn btn-secondary', onclick: () => {
-          config.caregivers.push({ id: makeId('c'), name: '', extension: '' });
-          draw();
-        } }, '＋ Ajouter un aidant')),
+        caregiversList(),
+        h('button', { class: 'btn btn-secondary', onclick: () => editCaregiver(null) }, '＋ Ajouter un aidant')),
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Catalogue d\'entités'),
         h('p', { class: 'hint' }, 'Donne un nom parlant aux capteurs : présence (radar, onMotion Fully…) ou autres capteurs pour les sous-tâches.'),
-        catalogTable(),
-        h('button', { class: 'btn btn-secondary', onclick: () => {
-          config.catalog.push({ id: makeId('e'), entity_id: '', name: '', type: 'presence' });
-          draw();
-        } }, '＋ Ajouter une entité')),
+        catalogList(),
+        h('button', { class: 'btn btn-secondary', onclick: () => editCatalogItem(null) }, '＋ Ajouter une entité')),
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Paramètres généraux'),
         settingsForm()),

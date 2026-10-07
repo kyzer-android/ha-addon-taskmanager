@@ -148,6 +148,13 @@ input[type="checkbox"] { width: 22px; height: 22px; }
 .task-status { color: var(--color-muted); font-size: 13px; }
 .task-item.is-event { border-left: 5px solid var(--color-audio); }
 .task-item.is-hidden .task-title { opacity: 0.5; }
+.task-item.is-disabled { opacity: 0.45; filter: grayscale(1); }
+.task-item.is-skipped { opacity: 0.6; }
+.task-item.is-skipped .task-title,
+.task-item.is-skipped .task-time { text-decoration: line-through; }
+.upload-preview { width: 100%; max-height: 40vh; margin: var(--spacing-md) 0; border-radius: var(--radius-md, 8px); background: #000; }
+.upload-dialog { background: var(--color-surface, #fff); color: inherit; padding: var(--spacing-lg, 20px); border-radius: var(--radius-md, 8px); width: min(480px, 92vw); display: flex; flex-direction: column; gap: var(--spacing-sm, 8px); }
+.upload-dialog .row { justify-content: flex-end; }
 .icon-btn { border: 0; background: none; font-size: 22px; min-width: var(--touch-size); min-height: var(--touch-size); cursor: pointer; }
 .icon-btn.is-off { opacity: 0.35; }
 

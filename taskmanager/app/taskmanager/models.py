@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import date
 import uuid
 from typing import Any
 
@@ -130,6 +131,17 @@ def clean_node(node: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def clean_dates(raw: Any) -> list[str]:
+    """Jours supprimés d'une tâche répétée (dates ISO valides, sans doublon)."""
+    days: set[str] = set()
+    for value in raw or []:
+        try:
+            days.add(date.fromisoformat(str(value)).isoformat())
+        except ValueError:
+            continue
+    return sorted(days)
+
+
 def clean_task(task: dict[str, Any]) -> dict[str, Any]:
     """Normalise une tâche complète reçue de l'interface."""
     base = new_task()
@@ -151,6 +163,7 @@ def clean_task(task: dict[str, Any]) -> dict[str, Any]:
         "root": clean_node(task.get("root") or {}),
         "last_run_date": str(task.get("last_run_date") or ""),
         "last_status": str(task.get("last_status") or ""),
+        "skipped_dates": clean_dates(task.get("skipped_dates")) if stype == "daily" else [],
     }
     if not out["root"]["title"]:
         out["root"]["title"] = out["title"]

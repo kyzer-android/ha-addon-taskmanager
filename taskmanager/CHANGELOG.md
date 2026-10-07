@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+- **Fil de la journée** : « Supprimer » ne retire que l'occurrence du jour (la répétition continue ; « Rétablir ce jour » annule). Pour supprimer toute la tâche : Modifier → « Supprimer toute la tâche (tous les jours) », avec confirmation.
+- **Désactivée** : la tâche reste dans le planning mais grisée (elle n'est ni lancée ni affichée sur la tablette).
+- **Archiver** : sort la tâche du planning pour la garder dans l'onglet Archive (réutilisable). Bouton aussi dans Modifier.
+- **Médias** : avant l'envoi d'une vidéo/d'un son, une fenêtre propose un aperçu et le choix du nom du fichier.
+
 ## 0.4.0
 - **Médias** : ajout de vidéos et de sons depuis le Créateur (fichier, ou « Filmer / Enregistrer avec le téléphone » via l'appli native), avec barre de progression ; suppression des fichiers ajoutés par l'add-on. Stockage dans `/media/taskmanager/` : le dossier média est maintenant monté en écriture (`media:rw`). Taille maximale réglable.
 - **Agendas automatiques** : les événements des calendriers cochés arrivent seuls dans le fil (actualisation toutes les 10 min, bouton « Actualiser »). On peut masquer un événement. Les événements « journée entière » sur plusieurs jours apparaissent chaque jour.

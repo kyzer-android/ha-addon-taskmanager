@@ -6,7 +6,7 @@ import ipaddress
 import logging
 import os
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -323,6 +323,31 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         await publish()
         return web.json_response(task)
 
+    @routes.post("/api/tasks/{task_id}/skip")
+    async def skip(request: web.Request) -> web.Response:
+        """Supprime une seule occurrence (ou la rétablit). Une tâche unique est supprimée entièrement."""
+        task = find(request)
+        data = await body(request)
+        try:
+            day = date.fromisoformat(str(data.get("date")))
+        except ValueError:
+            raise web.HTTPBadRequest(text="Date invalide")
+        if task["schedule"]["type"] != "daily":
+            if data.get("skipped", True):
+                storage.delete_task(task["id"])
+                await publish()
+                return web.json_response({"deleted": True})
+            raise web.HTTPBadRequest(text="Une tâche unique ne se rétablit pas : elle est supprimée")
+        days = set(task.get("skipped_dates") or [])
+        if data.get("skipped", True):
+            days.add(day.isoformat())
+        else:
+            days.discard(day.isoformat())
+        task["skipped_dates"] = sorted(days)
+        storage.save_tasks()
+        await publish()
+        return web.json_response({"deleted": False, "task": task})
+
     @routes.post("/api/tasks/{task_id}/run")
     async def run(request: web.Request) -> web.Response:
         task = find(request)
@@ -362,7 +387,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         return web.json_response({
             "date": target.isoformat(),
             "label": schedule.label_fr(target),
-            "items": schedule.items_for_day(storage.tasks, engine.visible_events(), target, False),
+            "items": schedule.items_for_day(storage.tasks, engine.visible_events(), target, False, admin=True),
         })
 
     @routes.get("/api/calendar")

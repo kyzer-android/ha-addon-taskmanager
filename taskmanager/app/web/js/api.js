@@ -30,6 +30,7 @@ export const api = {
   tasks: () => request('GET', 'api/tasks'),
   saveTask: (task) => request('POST', 'api/tasks', task),
   deleteTask: (id) => request('DELETE', `api/tasks/${id}`),
+  skipDay: (id, date, skipped) => request('POST', `api/tasks/${id}/skip`, { date, skipped }),
   flag: (id, name, value) => request('POST', `api/tasks/${id}/flag`, { name, value }),
   runTask: (id) => request('POST', `api/tasks/${id}/run`, {}),
   duplicate: (id, date) => request('POST', `api/tasks/${id}/duplicate`, { date }),

@@ -25,8 +25,10 @@ def parse_hhmm(value: str) -> time:
         return time(8, 0)
 
 
-def occurs_on(task: dict[str, Any], day: date) -> bool:
-    """La tâche tombe-t-elle ce jour-là ?"""
+def occurs_on(task: dict[str, Any], day: date, ignore_skips: bool = False) -> bool:
+    """La tâche tombe-t-elle ce jour-là ? (un jour supprimé de la répétition ne compte pas)"""
+    if not ignore_skips and day.isoformat() in (task.get("skipped_dates") or []):
+        return False
     sched = task["schedule"]
     if sched["type"] == "daily":
         return day.weekday() in sched.get("days", [])
@@ -103,19 +105,26 @@ def items_for_day(
     shown_events: list[dict[str, Any]],
     day: date,
     only_visible: bool = True,
+    admin: bool = False,
 ) -> list[dict[str, Any]]:
+    """Éléments d'un jour. `admin` : vue de gestion, qui garde aussi les tâches désactivées et les jours supprimés
+    (signalés par `enabled` / `skipped`) pour pouvoir les griser ou les rétablir."""
     items: list[dict[str, Any]] = []
     for task in tasks:
-        if task.get("archived") or not task.get("enabled", True):
+        if task.get("archived"):
+            continue
+        if not admin and not task.get("enabled", True):
             continue
         if only_visible and not task.get("visible", True):
             continue
-        if occurs_on(task, day):
+        if occurs_on(task, day, ignore_skips=admin):
             items.append({
                 "time": task["schedule"]["time"],
                 "title": task["title"],
                 "kind": "task",
                 "id": task["id"],
+                "enabled": bool(task.get("enabled", True)),
+                "skipped": day.isoformat() in (task.get("skipped_dates") or []),
             })
     for event in shown_events:
         _, label = event_day_and_time(event)

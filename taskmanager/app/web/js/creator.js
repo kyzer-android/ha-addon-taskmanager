@@ -1,3 +1,4 @@
+import { askUpload } from './upload-dialog.js';
 import { api } from './api.js';
 import { h, clear, field, toast, todayIso } from './dom.js';
 import { entityPicker, loadEntities } from './picker.js';
@@ -105,12 +106,16 @@ export const renderCreator = async (root, context, show) => {
   };
 
   // Envoi d'un média (fichier ou capture du téléphone) puis sélection automatique du fichier ajouté.
-  const uploadFor = async (node, file, progress) => {
+  const friendly = (file) => (file.deletable ? file.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ') : file.path);
+
+  const uploadFor = async (node, original, progress) => {
+    const file = await askUpload(original, node.media.kind);
+    if (!file) return;
     try {
       const added = await api.uploadMedia(file, (ratio) => { progress.value = ratio; progress.hidden = false; });
       media = await api.media();
       node.media.content_id = added.content_id;
-      node.media.label = added.name;
+      node.media.label = added.name.replace(/\.[^.]+$/, '').replace(/_/g, ' ');
       toast('Fichier ajouté');
       draw();
     } catch (error) {
@@ -131,7 +136,7 @@ export const renderCreator = async (root, context, show) => {
         draw();
       } }, files.map((file) => h('option', {
         value: file.content_id, selected: file.content_id === node.media.content_id,
-      }, file.path)))
+      }, friendly(file))))
       : h('input', { type: 'text', value: node.media.content_id, placeholder: 'media-source://media/…',
         oninput: bind(node.media, 'content_id') });
     if (files.length && !node.media.content_id) {
@@ -160,7 +165,7 @@ export const renderCreator = async (root, context, show) => {
         h('button', { class: 'btn btn-secondary btn-small', onclick: () => captureInput.click() },
           isVideo ? '📹 Filmer avec le téléphone' : '🎙️ Enregistrer avec le téléphone'),
         current?.deletable ? h('button', { class: 'btn btn-danger btn-small', onclick: async () => {
-          if (!window.confirm(`Supprimer définitivement « ${current.name} » ?`)) return;
+          if (!window.confirm(`Supprimer définitivement « ${friendly(current)} » ?`)) return;
           await api.deleteMedia(current.path);
           media = await api.media();
           node.media.content_id = '';
@@ -346,6 +351,20 @@ export const renderCreator = async (root, context, show) => {
       canvas,
       h('div', { class: 'canvas-actions' },
         h('button', { class: 'btn btn-danger', onclick: () => { draft = null; selectedId = ''; draw(); } }, '🗑 Effacer'),
+        isEdit ? h('button', { class: 'btn btn-secondary', onclick: async () => {
+          await api.flag(context.editTask.id, 'archived', true);
+          toast('Archivée');
+          context.editTask = null;
+          show('timeline');
+        } }, '📦 Archiver') : null,
+        isEdit ? h('button', { class: 'btn btn-danger', onclick: async () => {
+          const task = context.editTask;
+          if (!window.confirm(`Supprimer « ${task.title} » définitivement, pour TOUS les jours ?\n\nCette action est irréversible.`)) return;
+          await api.deleteTask(task.id);
+          toast('Tâche supprimée');
+          context.editTask = null;
+          show('timeline');
+        } }, '🗑 Supprimer toute la tâche (tous les jours)') : null,
         saveButton),
       calendarPanel());
   };

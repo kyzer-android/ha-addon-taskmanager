@@ -37,6 +37,36 @@ def test_task_lifecycle(engine):
     with_client(engine, scenario)
 
 
+def test_skip_day_and_disabled_greyed(engine):
+    async def scenario(client):
+        task = {"title": "Pilule", "schedule": {"type": "daily", "days": [0, 1, 2, 3, 4, 5, 6], "time": "09:00"},
+                "root": {}}
+        created = await (await client.post("/api/tasks", json=task)).json()
+        tid = created["id"]
+        day = "2026-12-24"
+        res = await (await client.post(f"/api/tasks/{tid}/skip", json={"date": day, "skipped": True})).json()
+        assert res["task"]["skipped_dates"] == [day]
+        items = (await (await client.get(f"/api/day?date={day}")).json())["items"]
+        assert items[0]["skipped"] is True  # visible côté aidant pour être rétablie
+        other = (await (await client.get("/api/day?date=2026-12-25")).json())["items"]
+        assert other[0]["skipped"] is False
+        await client.post(f"/api/tasks/{tid}/skip", json={"date": day, "skipped": False})
+        items = (await (await client.get(f"/api/day?date={day}")).json())["items"]
+        assert items[0]["skipped"] is False
+        # désactivée : reste dans le planning (grisée), absente de la tablette
+        await client.post(f"/api/tasks/{tid}/flag", json={"name": "enabled", "value": False})
+        items = (await (await client.get(f"/api/day?date={day}")).json())["items"]
+        assert items[0]["enabled"] is False
+        board = await (await client.get("/api/board?days=1")).json()
+        assert board[0]["items"] == []
+        # tâche unique : « supprimer ce jour » la supprime
+        once = await (await client.post("/api/tasks", json={
+            "title": "RDV", "schedule": {"type": "once", "date": day, "time": "10:00"}, "root": {}})).json()
+        res = await (await client.post(f"/api/tasks/{once['id']}/skip", json={"date": day})).json()
+        assert res["deleted"] is True
+    with_client(engine, scenario)
+
+
 def test_config_roundtrip_and_static_index(engine):
     async def scenario(client):
         config = await (await client.get("/api/config")).json()

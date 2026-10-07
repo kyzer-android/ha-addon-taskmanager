@@ -18,10 +18,11 @@ export const renderTimeline = async (root, context, show) => {
     const [day, tasks] = await Promise.all([api.day(currentDate), api.tasks()]);
     const byId = Object.fromEntries(tasks.map((task) => [task.id, task]));
     clear(banner).append(
-      h('button', { class: 'btn btn-secondary btn-small', onclick: () => { currentDate = shiftDate(currentDate, -1); load(); } }, '◀'),
-      h('span', {}, day.label),
-      h('input', { type: 'date', value: currentDate, onchange: (event) => { currentDate = event.target.value || currentDate; load(); } }),
-      h('button', { class: 'btn btn-secondary btn-small', onclick: () => { currentDate = shiftDate(currentDate, 1); load(); } }, '▶'),
+      h('span', { class: 'day-label' }, day.label),
+      h('div', { class: 'day-nav' },
+        h('button', { class: 'btn btn-secondary btn-small', onclick: () => { currentDate = shiftDate(currentDate, -1); load(); } }, '◀'),
+        h('input', { type: 'date', value: currentDate, onchange: (event) => { currentDate = event.target.value || currentDate; load(); } }),
+        h('button', { class: 'btn btn-secondary btn-small', onclick: () => { currentDate = shiftDate(currentDate, 1); load(); } }, '▶')),
     );
     clear(list);
     if (!day.items.length) list.append(h('li', { class: 'hint' }, 'Rien de prévu ce jour-là.'));
@@ -58,6 +59,7 @@ export const renderTimeline = async (root, context, show) => {
       h('span', { class: 'task-title' }, task.title,
         item.enabled === false ? h('span', { class: 'badge' }, 'Désactivée') : null,
         task.last_status ? h('div', { class: 'task-status' }, `Dernier état : ${task.last_status}`) : null),
+      h('div', { class: 'task-actions' },
       toggle('visible', 'Afficher sur la tablette', '👁️'),
       toggle('enabled', 'Activer / désactiver', '⏻'),
       h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
@@ -78,7 +80,7 @@ export const renderTimeline = async (root, context, show) => {
         await api.skipDay(task.id, currentDate, true);
         toast(isDaily ? 'Supprimée pour ce jour' : 'Tâche supprimée');
         load();
-      } }, 'Supprimer'),
+      } }, 'Supprimer')),
     );
   };
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+- **Téléphone** : le fil de la journée s'adapte aux petits écrans (date et navigation sur deux lignes, boutons qui passent à la ligne).
+- **Créateur** : la case « Appeler si personne ne répond » (et les autres cases/champs d'une carte) réagit enfin au clic.
+
 ## 0.5.0
 - **Fil de la journée** : « Supprimer » ne retire que l'occurrence du jour (la répétition continue ; « Rétablir ce jour » annule). Pour supprimer toute la tâche : Modifier → « Supprimer toute la tâche (tous les jours) », avec confirmation.
 - **Désactivée** : la tâche reste dans le planning mais grisée (elle n'est ni lancée ni affichée sur la tablette).

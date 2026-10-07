@@ -228,7 +228,13 @@ export const renderCreator = async (root, context, show) => {
       ondragover: (event) => { event.preventDefault(); event.stopPropagation(); card.classList.add('is-over'); },
       ondragleave: () => card.classList.remove('is-over'),
       ondrop: (event) => dropOn(event, node),
-      onclick: (event) => { event.stopPropagation(); selectedId = node.id; draw(); } },
+      onclick: (event) => {
+        event.stopPropagation();
+        selectedId = node.id;
+        // Un clic sur un champ ne doit pas redessiner la carte : le champ serait remplacé avant d'avoir réagi.
+        if (event.target.closest('input, select, textarea, button, label, video, audio')) return;
+        draw();
+      } },
     h('div', { class: 'row' },
       field(isRoot ? 'Titre de la tâche' : 'Titre de la sous-tâche',
         h('input', { type: 'text', value: isRoot ? draft.title : node.title,

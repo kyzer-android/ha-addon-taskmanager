@@ -36,11 +36,11 @@ export const renderTimeline = async (root, context, show) => {
         h('span', { class: 'task-title' }, item.title),
         h('span', { class: 'badge' }, 'Calendrier'));
     }
-    const toggle = (name, label, icon) => h('button', {
-      class: `icon-btn ${task[name] ? '' : 'is-off'}`,
+    const toggle = (name, label, textOn, textOff) => h('button', {
+      class: `toggle-btn ${task[name] ? 'is-on' : 'is-off'}`,
       title: label,
       onclick: async () => { await api.flag(task.id, name, !task[name]); load(); },
-    }, icon);
+    }, h('span', { class: 'toggle-dot' }), task[name] ? textOn : textOff);
     const classes = ['task-item', task.visible ? '' : 'is-hidden', item.enabled === false ? 'is-disabled' : '',
       item.skipped ? 'is-skipped' : ''].filter(Boolean).join(' ');
     if (item.skipped) {
@@ -57,21 +57,21 @@ export const renderTimeline = async (root, context, show) => {
     return h('li', { class: classes },
       h('span', { class: 'task-time' }, task.schedule.time),
       h('span', { class: 'task-title' }, task.title,
-        item.enabled === false ? h('span', { class: 'badge' }, 'Désactivée') : null,
         task.last_status ? h('div', { class: 'task-status' }, `Dernier état : ${task.last_status}`) : null),
       h('div', { class: 'task-actions' },
-      toggle('visible', 'Afficher sur la tablette', '👁️'),
-      toggle('enabled', 'Activer / désactiver', '⏻'),
+      toggle('visible', 'Afficher ou masquer sur la tablette', 'Visible', 'Masquée'),
+      toggle('enabled', 'Activer ou désactiver la tâche', 'Active', 'Désactivée'),
       h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
         const result = await api.runTask(task.id);
         toast(result.started ? 'Tâche lancée' : 'Déjà en cours');
       } }, 'Lancer'),
       h('button', { class: 'btn btn-secondary btn-small', onclick: () => { context.editTask = task; show('creator'); } }, 'Modifier'),
-      h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
-        await api.flag(task.id, 'archived', true);
-        toast('Archivée');
-        load();
-      } }, 'Archiver'),
+      h('button', { class: 'btn btn-secondary btn-small', title: 'Réutilisable depuis le Créateur (tuile Modèles)', onclick: async () => {
+        const name = window.prompt('Nom du modèle (sans date ni heure) :', task.title);
+        if (!name || !name.trim()) return;
+        await api.createTemplate(task.id, name.trim());
+        toast('Modèle enregistré');
+      } }, '📚 Modèle'),
       h('button', { class: 'btn btn-danger btn-small', onclick: async () => {
         const question = isDaily
           ? `Supprimer « ${task.title} » seulement le ${currentDate} ?\n\nElle continue les autres jours. Pour supprimer toute la répétition : Modifier → Supprimer.`

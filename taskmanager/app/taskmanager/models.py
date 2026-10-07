@@ -131,6 +131,13 @@ def clean_node(node: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def clean_template(raw: dict[str, Any]) -> dict[str, Any]:
+    """Modèle = bloc de tâche complet (actions, médias, questions, sous-tâches), sans date ni heure."""
+    root = clean_node(raw.get("root") or {})
+    name = str(raw.get("name") or root.get("title") or "Modèle").strip() or "Modèle"
+    return {"id": str(raw.get("id") or new_id("m")), "name": name[:80], "root": root}
+
+
 def clean_dates(raw: Any) -> list[str]:
     """Jours supprimés d'une tâche répétée (dates ISO valides, sans doublon)."""
     days: set[str] = set()

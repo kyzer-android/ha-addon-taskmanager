@@ -19,7 +19,7 @@ Version **0.4.0** : première implémentation complète du [cahier des charges](
 | Fonction | État |
 |---|---|
 | Pièces, tablettes et utilisateurs en paramètres (aucun nom en dur) | ✅ |
-| Tâches journalières ou uniques, archive, visibilité 👁️ | ✅ |
+| Tâches journalières ou uniques, modèles réutilisables, visibilité | ✅ |
 | Vidéo, audio, question OUI/NON, répétitions, sous-tâches (OUI, NON, sans réponse, capteur) | ✅ |
 | Choix de la pièce (présence la plus récente, sinon toutes les tablettes) | ✅ |
 | Écran allumé seulement s'il est éteint | ✅ |

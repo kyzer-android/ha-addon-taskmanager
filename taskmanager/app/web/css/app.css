@@ -150,7 +150,7 @@ input[type="checkbox"] { width: 22px; height: 22px; }
 .task-status { color: var(--color-muted); font-size: 13px; }
 .task-item.is-event { border-left: 5px solid var(--color-audio); }
 .task-item.is-hidden .task-title { opacity: 0.5; }
-.task-item.is-disabled { opacity: 0.45; filter: grayscale(1); }
+.task-item.is-disabled { opacity: 0.6; filter: grayscale(1); }
 .task-item.is-skipped { opacity: 0.6; }
 .task-item.is-skipped .task-title,
 .task-item.is-skipped .task-time { text-decoration: line-through; }
@@ -387,3 +387,23 @@ body.is-wide .tablet-view { min-height: calc(100vh - 150px); }
 .tablet-view:fullscreen { min-height: 100vh; border-radius: 0; overflow: auto; }
 .upload-progress { width: 160px; height: 14px; }
 .upload-progress[hidden] { display: none; }
+
+/* ===== Boutons d'état (Visible / Active) ===== */
+.toggle-btn {
+  display: inline-flex; align-items: center; gap: var(--spacing-xs); min-height: 36px;
+  padding: 0 var(--spacing-md); border-radius: 999px; cursor: pointer; font-size: 14px;
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+}
+.toggle-btn .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-success, #2e9e5b); }
+.toggle-btn.is-off { color: var(--color-muted); }
+.toggle-btn.is-off .toggle-dot { background: var(--color-muted); }
+.task-item.is-disabled .toggle-btn.is-off { filter: none; }
+
+/* ===== Modèles ===== */
+.tile-template { border: 2px dashed var(--color-primary); background: var(--color-surface); cursor: pointer; }
+.template-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.template-item {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--spacing-sm); padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--color-border);
+}
+.template-info { min-width: 160px; flex: 1; }

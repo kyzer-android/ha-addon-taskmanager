@@ -91,8 +91,8 @@ L'utilisateur sélectionne des entités HA et leur donne un nom parlant. Quatre 
 - **Unique** : un jour précis.
 - Heure de déclenchement.
 
-### 5.2 Archive
-Les tâches uniques passées vont en archive, récupérables.
+### 5.2 Modèles
+Un modèle est une tâche complète (actions, médias, questions, sous-tâches) enregistrée sans date ni heure depuis le fil de la journée. Il se réimporte depuis le Créateur (tuile Modèles), comme tâche ou comme sous-tâche. Les tâches uniques passées sont supprimées.
 
 ### 5.3 Visibilité
 Icône 👁️ pour afficher ou masquer la tâche sur la tablette. Une tâche masquée s'exécute quand même.
@@ -198,7 +198,7 @@ L'ancien délai maximum de 10 minutes est **supprimé**.
 
 | Vue | Utilisateurs | Contenu |
 |---|---|---|
-| Gestion (add-on, Ingress) | Mathieu et sa compagne, PC ou téléphone | Fil de la journée éditable, création de tâches, glisser-déposer, archive |
+| Gestion (add-on, Ingress) | Mathieu et sa compagne, PC ou téléphone | Fil de la journée éditable, création de tâches, glisser-déposer, modèles |
 | Tablette (dashboard HA) | Personne assistée | Fil du jour simplifié, tâches visibles uniquement (👁️ activé) |
 
 ### 11.1 Vue tablette
@@ -212,7 +212,7 @@ Les événements du calendrier Google sont proposés dans l'écran de création 
 
 ## 12. Stockage et architecture
 
-- Données au format JSON dans `/config/taskmanager/` (tâches, pièces, catalogue, archive).
+- Données au format JSON dans `/config/taskmanager/` (tâches, pièces, catalogue, modèles).
 - Moteur de planification interne à l'add-on (pas d'automatisations HA).
 - Au démarrage : vérification que les entités configurées existent encore, avec alerte dans le journal sinon.
 - Journal des exécutions et des réponses (utile pour les aidants et pour diagnostiquer).

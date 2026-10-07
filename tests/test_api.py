@@ -30,8 +30,14 @@ def test_task_lifecycle(engine):
         assert [i["title"] for i in day["items"]] == ["Lever"]
         board = await (await client.get("/api/board?days=2")).json()
         assert board[0]["items"] == []  # masquée : absente de la tablette
-        copy = await (await client.post(f"/api/tasks/{created['id']}/duplicate", json={"date": "2026-12-25"})).json()
-        assert copy["schedule"]["type"] == "once" and copy["id"] != created["id"]
+        # modèle : enregistré sans date ni heure
+        tpl = await (await client.post("/api/templates", json={"task_id": created["id"], "name": "Matin"})).json()
+        assert tpl["name"] == "Matin" and tpl["root"]["media"]["kind"] == "video" and "schedule" not in tpl
+        assert len(await (await client.get("/api/templates")).json()) == 1
+        renamed = await (await client.put(f"/api/templates/{tpl['id']}", json={"name": "Soir"})).json()
+        assert renamed["name"] == "Soir"
+        assert (await client.delete(f"/api/templates/{tpl['id']}")).status == 200
+        assert (await client.get("/api/templates")).status == 200
         assert (await client.delete(f"/api/tasks/{created['id']}")).status == 200
         assert (await client.delete("/api/tasks/nope")).status == 404
     with_client(engine, scenario)

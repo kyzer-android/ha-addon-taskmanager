@@ -22,8 +22,12 @@ class Storage:
         self.dir = Path(data_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.config: dict[str, Any] = models.merge_config(self._read("config.json", {}))
+        # L'archivage n'existe plus : les anciennes tâches archivées sont abandonnées.
         self.tasks: list[dict[str, Any]] = [
-            models.clean_task(t) for t in self._read("tasks.json", [])
+            models.clean_task(t) for t in self._read("tasks.json", []) if not t.get("archived")
+        ]
+        self.templates: list[dict[str, Any]] = [
+            models.clean_template(t) for t in self._read("templates.json", [])
         ]
         self.journal: list[dict[str, Any]] = self._read("journal.json", [])
         self._lock = asyncio.Lock()
@@ -59,6 +63,9 @@ class Storage:
     def save_tasks(self) -> None:
         self._write("tasks.json", self.tasks)
 
+    def save_templates(self) -> None:
+        self._write("templates.json", self.templates)
+
     def save_journal(self) -> None:
         self._write("journal.json", self.journal)
 
@@ -84,6 +91,28 @@ class Storage:
             return False
         self.tasks.remove(task)
         self.save_tasks()
+        return True
+
+    # ---- modèles --------------------------------------------------------------
+    def get_template(self, template_id: str) -> dict[str, Any] | None:
+        return next((t for t in self.templates if t["id"] == template_id), None)
+
+    def upsert_template(self, raw: dict[str, Any]) -> dict[str, Any]:
+        cleaned = models.clean_template(raw)
+        existing = self.get_template(cleaned["id"])
+        if existing:
+            self.templates[self.templates.index(existing)] = cleaned
+        else:
+            self.templates.append(cleaned)
+        self.save_templates()
+        return cleaned
+
+    def delete_template(self, template_id: str) -> bool:
+        template = self.get_template(template_id)
+        if not template:
+            return False
+        self.templates.remove(template)
+        self.save_templates()
         return True
 
     # ---- config ---------------------------------------------------------------

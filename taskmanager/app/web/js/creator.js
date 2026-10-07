@@ -1,3 +1,4 @@
+import { openTemplates } from './templates.js';
 import { askUpload } from './upload-dialog.js';
 import { api } from './api.js';
 import { h, clear, field, toast, todayIso } from './dom.js';
@@ -34,7 +35,6 @@ const newTask = () => ({
   title: 'Nouvelle tâche',
   enabled: true,
   visible: true,
-  archived: false,
   schedule: { type: 'daily', days: [0, 1, 2, 3, 4, 5, 6], date: todayIso(), time: '08:00' },
   root: newNode('Nouvelle tâche'),
   last_run_date: '',
@@ -47,6 +47,7 @@ export const renderCreator = async (root, context, show) => {
   const caregivers = config.users.filter((user) => user.role === 'aidant');
   let draft = context.editTask ? structuredClone(context.editTask) : null;
   const isEdit = Boolean(context.editTask);
+  const editedTask = context.editTask;
   context.editTask = null;
   let selectedId = draft ? draft.root.id : '';
 
@@ -89,6 +90,32 @@ export const renderCreator = async (root, context, show) => {
     applyTile(target, tileId);
     selectedId = target.id;
     draw();
+  };
+
+  // Un modèle importé reçoit de nouveaux identifiants : il peut être importé plusieurs fois.
+  const freshNode = (node) => ({
+    ...structuredClone(node),
+    id: makeId('n'),
+    children: node.children.map((child) => ({ ...structuredClone(child), node: freshNode(child.node) })),
+  });
+
+  const importTemplate = (template) => {
+    const node = freshNode(template.root);
+    if (!draft) {
+      draft = newTask();
+      draft.title = node.title || template.name;
+      draft.root = node;
+    } else {
+      const target = findNode(draft.root, selectedId) || draft.root;
+      target.children.push({
+        trigger: target.question ? 'yes' : 'sensor',
+        sensor: { entity_id: '', state: 'on', repeat_minutes: 10 },
+        node,
+      });
+    }
+    selectedId = node.id;
+    draw();
+    toast(`Modèle « ${template.name} » importé`);
   };
 
   const findNode = (node, id) => {
@@ -352,23 +379,17 @@ export const renderCreator = async (root, context, show) => {
           class: `tile ${tile.cls}`, draggable: true,
           ondragstart: (event) => event.dataTransfer.setData('text/plain', tile.id),
           onclick: () => tapTile(tile.id),
-        }, `${tile.icon} ${tile.label}`)))),
+        }, `${tile.icon} ${tile.label}`)),
+        h('div', { class: 'tile tile-template', onclick: () => openTemplates(importTemplate) }, '📚 Modèles'))),
       draft ? h('section', { class: 'panel' }, scheduleForm()) : null,
       canvas,
       h('div', { class: 'canvas-actions' },
         h('button', { class: 'btn btn-danger', onclick: () => { draft = null; selectedId = ''; draw(); } }, '🗑 Effacer'),
-        isEdit ? h('button', { class: 'btn btn-secondary', onclick: async () => {
-          await api.flag(context.editTask.id, 'archived', true);
-          toast('Archivée');
-          context.editTask = null;
-          show('timeline');
-        } }, '📦 Archiver') : null,
         isEdit ? h('button', { class: 'btn btn-danger', onclick: async () => {
-          const task = context.editTask;
+          const task = editedTask;
           if (!window.confirm(`Supprimer « ${task.title} » définitivement, pour TOUS les jours ?\n\nCette action est irréversible.`)) return;
           await api.deleteTask(task.id);
           toast('Tâche supprimée');
-          context.editTask = null;
           show('timeline');
         } }, '🗑 Supprimer toute la tâche (tous les jours)') : null,
         saveButton),

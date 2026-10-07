@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+- **Modèles** : l'onglet Archive disparaît. Sur chaque ligne du Fil de la journée, « 📚 Modèle » enregistre la tâche complète (actions, médias, questions, sous-tâches) **sans date ni heure**. Dans le Créateur, la tuile « 📚 Modèles » liste les modèles (importer, renommer, supprimer) : sur un canvas vide le modèle devient la tâche, avec une carte sélectionnée il s'ajoute comme sous-tâche.
+- Le bouton « Archiver » est supprimé ; les anciennes tâches archivées sont abandonnées. Une tâche unique terminée ou passée est supprimée.
+- **Boutons d'état** : « Visible / Masquée » et « Active / Désactivée » en texte clair (plus de symbole ⏻ illisible sur téléphone). Une tâche désactivée grise toute sa ligne.
+
 ## 0.5.1
 - **Téléphone** : le fil de la journée s'adapte aux petits écrans (date et navigation sur deux lignes, boutons qui passent à la ligne).
 - **Créateur** : la case « Appeler si personne ne répond » (et les autres cases/champs d'une carte) réagit enfin au clic.

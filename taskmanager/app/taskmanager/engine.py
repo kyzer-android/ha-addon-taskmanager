@@ -166,10 +166,10 @@ class Engine:
         grace = float(self.settings.get("grace_minutes", 5))
         launched: list[str] = []
         changed = False
-        for task in self.storage.tasks:
+        for task in list(self.storage.tasks):
             if schedule.is_missed_once(task, now.date()):
-                task["archived"] = True
-                task["last_status"] = task.get("last_status") or "manquée"
+                self.storage.tasks.remove(task)
+                self.log("info", f"Tâche unique passée supprimée : {task['title']}", task_id=task["id"])
                 changed = True
                 continue
             if schedule.is_due(task, now, grace) and task["id"] not in self.runs:
@@ -204,8 +204,8 @@ class Engine:
             self.log("warning", f"Erreur pendant « {task['title']} » : {err}", task_id=task["id"])
         finally:
             task["last_status"] = status
-            if task["schedule"]["type"] == "once":
-                task["archived"] = True
+            if task["schedule"]["type"] == "once" and task in self.storage.tasks:
+                self.storage.tasks.remove(task)  # tâche unique terminée : rien à garder (voir les modèles)
             self.storage.save_tasks()
             self.log("info", f"Tâche terminée : {task['title']} ({status})", task_id=task["id"])
 

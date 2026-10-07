@@ -183,7 +183,7 @@ def test_sensor_child_loops_while_condition_holds(engine, ha):
     assert len(plays) == 4  # 2 passages x 2 tablettes, puis le capteur repasse à « off »
 
 
-def test_tick_launches_due_task_once_and_archives_once_tasks(engine, ha):
+def test_tick_launches_due_task_once_and_removes_once_tasks(engine, ha):
     task = models.clean_task({
         "title": "Uniquement", "schedule": {"type": "once", "date": engine.now().date().isoformat(),
                                             "time": "00:00"},
@@ -199,7 +199,7 @@ def test_tick_launches_due_task_once_and_archives_once_tasks(engine, ha):
 
     first, second = run(scenario())
     assert first == [task["id"]] and second == []
-    assert task["archived"] is True and task["last_run_date"]
+    assert task not in engine.storage.tasks  # tâche unique terminée : supprimée
 
 
 def test_publish_board_sets_sensor(engine, ha):

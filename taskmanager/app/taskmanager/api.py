@@ -316,7 +316,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         task = find(request)
         data = await body(request)
         name = data.get("name")
-        if name not in ("visible", "enabled", "archived"):
+        if name not in ("visible", "enabled"):
             raise web.HTTPBadRequest(text="Champ inconnu")
         task[name] = bool(data.get("value"))
         storage.save_tasks()
@@ -353,21 +353,33 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         task = find(request)
         return web.json_response({"started": engine.start_task(task)})
 
-    @routes.post("/api/tasks/{task_id}/duplicate")
-    async def duplicate(request: web.Request) -> web.Response:
-        source = find(request)
+    @routes.get("/api/templates")
+    async def list_templates(request: web.Request) -> web.Response:
+        return web.json_response(storage.templates)
+
+    @routes.post("/api/templates")
+    async def create_template(request: web.Request) -> web.Response:
+        """Enregistre la tâche `task_id` comme modèle (sans date ni heure)."""
         data = await body(request)
-        copy = models.clean_task({**source, "id": ""})
-        copy["id"] = models.new_id("t")
-        copy["archived"] = False
-        copy["last_run_date"] = ""
-        copy["last_status"] = ""
-        if data.get("date"):
-            copy["schedule"] = {**copy["schedule"], "type": "once", "date": str(data["date"]), "days": []}
-        storage.tasks.append(copy)
-        storage.save_tasks()
-        await publish()
-        return web.json_response(copy)
+        task = storage.get_task(str(data.get("task_id")))
+        if not task:
+            raise web.HTTPNotFound()
+        template = storage.upsert_template({"name": data.get("name") or task["title"], "root": task["root"]})
+        return web.json_response(template)
+
+    @routes.put("/api/templates/{template_id}")
+    async def rename_template(request: web.Request) -> web.Response:
+        template = storage.get_template(request.match_info["template_id"])
+        if not template:
+            raise web.HTTPNotFound()
+        data = await body(request)
+        return web.json_response(storage.upsert_template({**template, "name": data.get("name") or template["name"]}))
+
+    @routes.delete("/api/templates/{template_id}")
+    async def delete_template(request: web.Request) -> web.Response:
+        if not storage.delete_template(request.match_info["template_id"]):
+            raise web.HTTPNotFound()
+        return web.json_response({"ok": True})
 
     @routes.get("/api/board")
     async def board(request: web.Request) -> web.Response:

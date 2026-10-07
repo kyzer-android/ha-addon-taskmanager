@@ -2,7 +2,6 @@ import { loadEntities } from './picker.js';
 import { h, clear } from './dom.js';
 import { renderTimeline } from './timeline.js';
 import { renderCreator } from './creator.js';
-import { renderArchive } from './archive.js';
 import { renderSettings } from './settings.js';
 import { renderJournal } from './journal.js';
 import { renderTablet } from './tablet.js';
@@ -11,7 +10,6 @@ import { api } from './api.js';
 const pages = [
   { id: 'timeline', label: 'Fil de la journée', render: renderTimeline },
   { id: 'creator', label: 'Créateur', render: renderCreator },
-  { id: 'archive', label: 'Archive', render: renderArchive },
   { id: 'tablet', label: 'Vue tablette', wide: true,
     render: (root, ctx, showPage) => renderTablet(root, ctx, showPage, { preview: true }) },
   { id: 'settings', label: 'Configuration', render: renderSettings },

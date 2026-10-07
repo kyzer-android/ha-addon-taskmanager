@@ -363,3 +363,11 @@ body.is-tablet .app-main { max-width: none; padding: 0; margin: 0; }
 .badge { display: inline-block; padding: 2px var(--spacing-sm); border-radius: var(--radius-md); font-size: 12px; background: var(--color-bg); color: var(--color-muted); }
 .badge-warning { background: #fff3cd; color: #856404; }
 .image-upload { align-self: flex-start; }
+
+/* Onglet « Vue tablette » : pleine largeur et pleine hauteur. */
+body.is-wide .app-main { max-width: none; padding: var(--spacing-sm) var(--spacing-md); }
+body.is-wide .tablet-view { min-height: calc(100vh - 150px); }
+.tablet-toolbar { display: flex; align-items: center; gap: var(--spacing-md); margin-bottom: var(--spacing-sm); }
+.tablet-view:fullscreen { min-height: 100vh; border-radius: 0; overflow: auto; }
+.upload-progress { width: 160px; height: 14px; }
+.upload-progress[hidden] { display: none; }

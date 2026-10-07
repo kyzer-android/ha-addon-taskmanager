@@ -85,3 +85,12 @@ def test_board_hides_invisible_and_adds_events():
     assert titles == ["Lever", "Médecin"]
     assert board[0]["label"] == "mercredi 7 octobre"
     assert board[1]["items"] == []
+
+
+def test_all_day_event_spans_every_day_and_is_listed_first():
+    events = [{"key": "k", "summary": "Vacances", "start": "2026-10-07", "end": "2026-10-10"},
+              {"key": "m", "summary": "Médecin", "start": "2026-10-08T10:30:00+02:00", "end": "2026-10-08T11:00:00+02:00"}]
+    board = schedule.build_board([], events, date(2026, 10, 7), 4)
+    titles = [[item["title"] for item in day["items"]] for day in board]
+    assert titles == [["Vacances"], ["Vacances", "Médecin"], ["Vacances"], []]
+    assert board[1]["items"][0]["time"] == schedule.ALL_DAY_LABEL

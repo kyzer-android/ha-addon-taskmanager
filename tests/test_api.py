@@ -65,15 +65,54 @@ def test_media_listing_and_calendar(engine, tmp_path):
     (tmp_path / "video_papa" / "note.txt").write_bytes(b"")
     found = list_media(str(tmp_path))
     assert found == [{"name": "lever.mp4", "path": "video_papa/lever.mp4",
-                      "content_id": "media-source://media/video_papa/lever.mp4", "kind": "video"}]
+                      "content_id": "media-source://media/video_papa/lever.mp4", "kind": "video", "deletable": False}]
     engine.storage.config["settings"]["calendar_entities"] = ["calendar.papa"]
 
     async def scenario(client):
+        # Le calendrier coché est importé tout seul : pas besoin de choisir les événements.
+        config = await (await client.get("/api/config")).json()
+        await client.put("/api/config", json=config)
         events = await (await client.get("/api/calendar")).json()
-        assert events[0]["summary"] == "Médecin" and events[0]["shown"] is False
-        await client.put("/api/shown_events", json=[events[0]])
-        again = await (await client.get("/api/calendar")).json()
-        assert again[0]["shown"] is True
+        assert events[0]["summary"] == "Médecin" and events[0]["hidden"] is False
+        board = await (await client.get("/api/board?days=3")).json()
+        assert any(item["title"] == "Médecin" for day in board for item in day["items"])
+        # Un événement peut être masqué.
+        await client.put("/api/hidden_events", json=[events[0]["key"]])
+        assert (await (await client.get("/api/calendar")).json())[0]["hidden"] is True
+        board = await (await client.get("/api/board?days=3")).json()
+        assert not any(item["title"] == "Médecin" for day in board for item in day["items"])
+    with_client(engine, scenario)
+
+
+def test_media_upload_and_delete(engine, tmp_path):
+    from aiohttp import FormData
+    media = tmp_path / "media-root"
+    media.mkdir()
+    (media / "autre.mp4").write_bytes(b"x")
+    engine.media_dir = str(media)
+
+    async def scenario(client):
+        form = FormData()
+        form.add_field("file", b"videodata", filename="lever.mp4", content_type="video/mp4")
+        added = await (await client.post("/api/media", data=form)).json()
+        assert added["path"] == "taskmanager/lever.mp4" and added["deletable"] is True and added["kind"] == "video"
+        again = FormData()
+        again.add_field("file", b"v2", filename="lever.mp4", content_type="video/mp4")
+        assert (await (await client.post("/api/media", data=again)).json())["name"] == "lever-1.mp4"
+        bad = FormData()
+        bad.add_field("file", b"x", filename="script.sh", content_type="text/plain")
+        assert (await client.post("/api/media", data=bad)).status == 400
+        listed = {item["path"]: item["deletable"] for item in await (await client.get("/api/media")).json()}
+        assert listed == {"autre.mp4": False, "taskmanager/lever.mp4": True, "taskmanager/lever-1.mp4": True}
+        assert (await client.delete("/api/media/autre.mp4")).status == 403
+        assert (await client.delete("/api/media/taskmanager/..%2Fautre.mp4")).status in (403, 404)
+        assert (await client.delete("/api/media/taskmanager/lever.mp4")).status == 200
+        assert (media / "autre.mp4").exists() and not (media / "taskmanager" / "lever.mp4").exists()
+        engine.storage.config["settings"]["media_max_mb"] = 0.00001
+        big = FormData()
+        big.add_field("file", b"x" * 5000, filename="gros.mp4", content_type="video/mp4")
+        assert (await client.post("/api/media", data=big)).status == 413
+        assert not (media / "taskmanager" / "gros.mp4").exists()
     with_client(engine, scenario)
 
 

@@ -41,7 +41,8 @@ const newTask = () => ({
 });
 
 export const renderCreator = async (root, context, show) => {
-  const [config, media, entities] = await Promise.all([api.config(), api.media(), loadEntities()]);
+  const [config, initialMedia, entities] = await Promise.all([api.config(), api.media(), loadEntities()]);
+  let media = initialMedia;
   const caregivers = config.users.filter((user) => user.role === 'aidant');
   let draft = context.editTask ? structuredClone(context.editTask) : null;
   const isEdit = Boolean(context.editTask);
@@ -103,13 +104,31 @@ export const renderCreator = async (root, context, show) => {
     refreshSaveState();
   };
 
+  // Envoi d'un média (fichier ou capture du téléphone) puis sélection automatique du fichier ajouté.
+  const uploadFor = async (node, file, progress) => {
+    try {
+      const added = await api.uploadMedia(file, (ratio) => { progress.value = ratio; progress.hidden = false; });
+      media = await api.media();
+      node.media.content_id = added.content_id;
+      node.media.label = added.name;
+      toast('Fichier ajouté');
+      draw();
+    } catch (error) {
+      progress.hidden = true;
+      toast(`Envoi impossible : ${error.message}`);
+    }
+  };
+
   const mediaBlock = (node) => {
+    const isVideo = node.media.kind === 'video';
     const files = media.filter((file) => file.kind === node.media.kind);
+    const current = files.find((file) => file.content_id === node.media.content_id);
     const control = files.length
       ? h('select', { onchange: (event) => {
         node.media.content_id = event.target.value;
         node.media.label = event.target.selectedOptions[0].textContent;
         refreshSaveState();
+        draw();
       } }, files.map((file) => h('option', {
         value: file.content_id, selected: file.content_id === node.media.content_id,
       }, file.path)))
@@ -119,13 +138,36 @@ export const renderCreator = async (root, context, show) => {
       node.media.content_id = files[0].content_id;
       node.media.label = files[0].name;
     }
+    const progress = h('progress', { class: 'upload-progress', max: 1, value: 0, hidden: true });
+    const picker = (accept, capture) => h('input', { type: 'file', accept, capture, hidden: true,
+      onchange: (event) => {
+        const [file] = event.target.files;
+        event.target.value = '';
+        if (file) uploadFor(node, file, progress);
+      } });
+    const fileInput = picker(isVideo ? 'video/*,.mp4,.webm,.mov,.mkv,.m4v,.3gp' : 'audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.opus');
+    // Plan B retenu : l'application caméra / dictaphone du téléphone, qui évite les restrictions de l'iframe.
+    const captureInput = picker(isVideo ? 'video/*' : 'audio/*', isVideo ? 'environment' : true);
     return h('div', { class: `node-block node-block-${node.media.kind}` },
       h('div', { class: 'row' },
-        field(node.media.kind === 'video' ? 'Vidéo' : 'Audio', control),
+        field(isVideo ? 'Vidéo' : 'Audio', control),
         h('button', { class: 'btn btn-secondary btn-small', onclick: () => {
           node.media = { kind: 'none', content_id: '', label: '' };
           draw();
-        } }, 'Retirer')));
+        } }, 'Retirer')),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn btn-secondary btn-small', onclick: () => fileInput.click() }, '⬆️ Ajouter un fichier'),
+        h('button', { class: 'btn btn-secondary btn-small', onclick: () => captureInput.click() },
+          isVideo ? '📹 Filmer avec le téléphone' : '🎙️ Enregistrer avec le téléphone'),
+        current?.deletable ? h('button', { class: 'btn btn-danger btn-small', onclick: async () => {
+          if (!window.confirm(`Supprimer définitivement « ${current.name} » ?`)) return;
+          await api.deleteMedia(current.path);
+          media = await api.media();
+          node.media.content_id = '';
+          node.media.label = '';
+          draw();
+        } }, '🗑️ Supprimer ce fichier') : null,
+        fileInput, captureInput, progress));
   };
 
   const questionBlock = (node) => h('div', { class: 'node-block node-block-question' },
@@ -216,9 +258,9 @@ export const renderCreator = async (root, context, show) => {
             draw();
           } }, label)),
         h('button', { class: 'btn btn-secondary btn-small', onclick: () => {
-          sched.days = [0, 1, 2, 3, 4, 5, 6];
+          sched.days = sched.days.length === 7 ? [] : [0, 1, 2, 3, 4, 5, 6];
           draw();
-        } }, 'Tous les jours')) : null,
+        } }, sched.days.length === 7 ? 'Aucun jour' : 'Tous les jours')) : null,
       h('div', { class: 'row' },
         h('label', { class: 'row' }, h('input', { type: 'checkbox', checked: draft.visible,
           onchange: (event) => { draft.visible = event.target.checked; } }), '👁️ Visible sur la tablette'),
@@ -247,29 +289,38 @@ export const renderCreator = async (root, context, show) => {
 
   const calendarPanel = () => {
     const box = h('div');
-    const panel = h('section', { class: 'panel' },
-      h('h2', { class: 'panel-title' }, 'Événements du calendrier'),
+    let events = [];
+    const hasCalendars = (config.settings.calendar_entities || []).length > 0;
+    const drawEvents = () => {
+      clear(box);
+      if (!hasCalendars) {
+        box.append(h('p', { class: 'hint' }, 'Aucun calendrier coché : voir Configuration → Calendriers.'));
+        return;
+      }
+      if (!events.length) box.append(h('p', { class: 'hint' }, 'Aucun événement à venir.'));
+      events.forEach((event) => {
+        box.append(h('label', { class: 'row' },
+          h('input', { type: 'checkbox', checked: !event.hidden, onchange: async (change) => {
+            event.hidden = !change.target.checked;
+            await api.saveHiddenEvents(events.filter((item) => item.hidden).map((item) => item.key));
+            toast(event.hidden ? 'Événement masqué' : 'Événement affiché');
+          } }),
+          `${event.start.replace('T', ' ').slice(0, 16)} · ${event.summary}`));
+      });
+    };
+    const load = async (refresh) => {
+      try { events = refresh ? await api.refreshCalendar() : await api.calendar(); } catch (error) { events = []; }
+      drawEvents();
+    };
+    load(false);
+    return h('section', { class: 'panel' },
+      h('h2', { class: 'panel-title' }, 'Événements des calendriers'),
       h('p', { class: 'hint' },
-        'Choisis ceux qui s\'affichent dans le fil de la journée sur la tablette. Les calendriers se déclarent dans Configuration.'),
-      h('button', { class: 'btn btn-secondary', onclick: async () => {
-        clear(box);
-        const events = await api.calendar();
-        if (!events.length) box.append(h('p', { class: 'hint' }, 'Aucun événement à venir (ou aucun calendrier déclaré).'));
-        events.forEach((event) => {
-          const checkbox = h('input', { type: 'checkbox', checked: event.shown });
-          checkbox.addEventListener('change', async () => {
-            const selected = events.filter((_, i) => boxes[i].checked);
-            await api.saveShownEvents(selected);
-            toast('Fil mis à jour');
-          });
-          boxes.push(checkbox);
-          box.append(h('label', { class: 'row' }, checkbox, `${event.start.replace('T', ' ').slice(0, 16)} · ${event.summary}`));
-        });
-      } }, 'Charger les événements'),
+        'Les événements des calendriers cochés dans Configuration arrivent automatiquement dans le fil de la tablette. Décoche ceux que tu veux masquer.'),
+      hasCalendars ? h('button', { class: 'btn btn-secondary btn-small', onclick: () => load(true) }, '🔄 Actualiser') : null,
       box);
-    const boxes = [];
-    return panel;
   };
+
 
   const draw = () => {
     clear(page);

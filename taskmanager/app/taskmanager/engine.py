@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time as time_module
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
@@ -100,6 +100,8 @@ class Engine:
         self.display_lock = asyncio.Lock()
         self._tasks: list[asyncio.Task] = []
         self._warned_no_browser: set[str] = set()
+        self.calendar_events: list[dict[str, Any]] = []
+        self._calendar_refreshed = float("-inf")
 
     # ---- raccourcis -----------------------------------------------------------
     @property
@@ -146,6 +148,10 @@ class Engine:
     async def _board_loop(self) -> None:
         while True:
             try:
+                every = max(1.0, float(self.settings.get("calendar_refresh_minutes", 10))) * 60
+                if time_module.monotonic() - self._calendar_refreshed >= every:
+                    await self.refresh_calendars()
+                    self._calendar_refreshed = time_module.monotonic()
                 await self.publish_board()
             except asyncio.CancelledError:
                 raise
@@ -547,9 +553,45 @@ class Engine:
                                            {"browser_id": [room["browser_id"]], "path": home})
 
     # ---- fil du jour ---------------------------------------------------------------------
+    def visible_events(self) -> list[dict[str, Any]]:
+        """Événements importés des calendriers cochés, hors ceux que l'aidant a masqués."""
+        hidden = set(self.config.get("hidden_events", []))
+        return [event for event in self.calendar_events if event["key"] not in hidden]
+
+    async def refresh_calendars(self) -> None:
+        """Importe les événements des calendriers cochés (aujourd'hui + jours publiés, 14 jours au moins)."""
+        entities = list(self.settings.get("calendar_entities") or [])
+        days = max(14, int(self.settings.get("days_published", 4)))
+        start = self.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=days)
+        events: list[dict[str, Any]] = []
+        failed = False
+        for entity_id in entities:
+            try:
+                raw_events = await self.ha.calendar_events(entity_id, start.isoformat(), end.isoformat())
+            except Exception as err:  # noqa: BLE001
+                failed = True
+                self.log("warning", f"Calendrier {entity_id} indisponible : {err}")
+                continue
+            for raw in raw_events:
+                raw_start = raw.get("start") or {}
+                raw_end = raw.get("end") or {}
+                start_value = raw_start.get("dateTime") or raw_start.get("date") or ""
+                summary = str(raw.get("summary") or "Événement")
+                events.append({
+                    "key": schedule.event_key(entity_id, start_value, summary), "entity_id": entity_id,
+                    "summary": summary, "start": start_value,
+                    "end": raw_end.get("dateTime") or raw_end.get("date") or "",
+                })
+        if failed and self.calendar_events and not events:
+            return  # on garde les derniers événements connus plutôt que de vider le fil
+        events.sort(key=lambda event: (event["start"], event["summary"]))
+        self.calendar_events = events
+        self._calendar_refreshed = time_module.monotonic()
+
     def board(self) -> list[dict[str, Any]]:
         return schedule.build_board(
-            self.storage.tasks, self.config.get("shown_events", []),
+            self.storage.tasks, self.visible_events(),
             self.now().date(), int(self.settings.get("days_published", 4)),
         )
 

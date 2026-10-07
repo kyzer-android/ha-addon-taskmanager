@@ -26,11 +26,12 @@ Environnement : Home Assistant OS sur Raspberry Pi 5 (« HA2 »), Browser Mod, F
 - **Question** : affichée pendant la lecture (popup tag `question`), 1 minute par défaut (réglable). Réponse : ferme la question partout, arrête la vidéo des autres tablettes. Sans réponse : répétitions, puis escalade (optionnelle, aidants choisis par tâche), puis sous-tâches « aucune réponse ». Un « non » veut dire que tout va bien.
 - **Sous-tâches** : branches sur OUI / NON / aucune réponse / condition capteur (rejouer toutes les N minutes tant que le capteur a l'état voulu).
 - **Audio seul** : aucun popup, le son joue en arrière-plan.
-- **Calendrier Google** : les événements sont proposés dans l'écran de création ; je choisis ceux qui apparaissent dans le fil.
+- **Agendas** : les événements des calendriers cochés (Configuration → Calendriers) sont **importés automatiquement** (toutes les 10 min, réglable ; aussi à l'enregistrement de la config) dans le fil. Ils ne sont jamais exécutés (pas de vidéo/question). On peut masquer un événement précis dans le Créateur (`hidden_events`). Événements « journée entière » multi-jours affichés chaque jour, en tête.
+- **Médias** : le dossier `/media` est monté en écriture (`media:rw`) ; l'add-on n'écrit/supprime que dans `/media/taskmanager/`. Ajout par fichier ou par capture de l'appli caméra/dictaphone du téléphone (`<input capture>`, plan B choisi car l'iframe Ingress peut bloquer caméra/micro) ; limite de taille réglable (500 Mo par défaut). Pas de conversion (ffmpeg non embarqué) : à ajouter si une tablette ne lit pas un format.
 - **Vue tablette** : page de l'add-on (Ingress, `web/js/tablet.js`), pas de carte Lovelace. Rôle déduit du compte HA (en-tête `X-Remote-User-Id`, voir `access.py` et `docs/vue-tablette.md`) : admin/aidant = interface complète (+ onglet « Vue tablette »), compte « tablette » = vue plein écran en lecture seule. Utilisateurs (`config.users` : compte HA, rôle, extension) remplacent l'ancienne liste « aidants » (migration automatique). Fond d'écran choisi parmi les images téléversées (`/config/taskmanager/images`) ou `/media`. Le capteur `sensor.taskmanager_fil_du_jour` reste publié.
 - **Réponse IA (V2)** : même structure que les boutons (`valeur`, `source`, `texte brut`) ; point d'entrée `POST /api/answer` déjà prêt.
 
-## État du code (v0.3.0)
+## État du code (v0.4.0)
 Backend Python/aiohttp dans `taskmanager/app/taskmanager/` (`engine.py` = cœur), interface sans build dans `taskmanager/app/web/`, tests dans `tests/` (`python -m pytest -q tests`, tous verts, faux HA). Jamais testé sur un vrai HA.
 
 ## À valider / à faire ensuite

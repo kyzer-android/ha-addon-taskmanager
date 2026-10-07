@@ -38,6 +38,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "tablet_min_day_width": 360,
     "video_style": DEFAULT_VIDEO_STYLE,
     "calendar_entities": [],
+    "calendar_refresh_minutes": 10,
+    "media_max_mb": 500,
 }
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -46,7 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "users": [],
     "catalog": [],
     "settings": copy.deepcopy(DEFAULT_SETTINGS),
-    "shown_events": [],
+    "hidden_events": [],
 }
 
 USER_ROLES = ("aidant", "tablette")
@@ -175,8 +177,9 @@ def caregivers(config: dict[str, Any]) -> list[dict[str, Any]]:
 def merge_config(raw: dict[str, Any]) -> dict[str, Any]:
     """Complète une configuration lue sur disque avec les valeurs par défaut."""
     config = copy.deepcopy(DEFAULT_CONFIG)
-    for key in ("rooms", "catalog", "shown_events"):
+    for key in ("rooms", "catalog"):
         config[key] = list(raw.get(key) or [])
+    config["hidden_events"] = [str(key) for key in (raw.get("hidden_events") or [])]
     # Reprise de l'ancienne liste « aidants » : mêmes identifiants, donc les tâches restent valides.
     legacy = [{**person, "role": "aidant"} for person in (raw.get("caregivers") or [])]
     config["users"] = [clean_user(user) for user in (raw.get("users") or legacy)]

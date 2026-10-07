@@ -17,8 +17,9 @@ from .engine import Engine
 
 _LOGGER = logging.getLogger(__name__)
 INGRESS_PEER = "172.30.32.2"
-VIDEO_EXT = {"mp4", "webm", "mkv", "mov"}
-AUDIO_EXT = {"mp3", "wav", "m4a", "aac", "ogg", "flac"}
+VIDEO_EXT = {"mp4", "webm", "mkv", "mov", "m4v", "3gp"}
+AUDIO_EXT = {"mp3", "wav", "m4a", "aac", "ogg", "flac", "opus"}
+MEDIA_UPLOAD_DIR = "taskmanager"  # seul sous-dossier de /media où l'add-on écrit et supprime
 
 
 class IngressApplication(web.Application):
@@ -103,6 +104,42 @@ def background_url(settings: dict[str, Any]) -> str:
     return f"api/image/{source}/{name}" if source in ("upload", "media") and name else ""
 
 
+async def save_upload(request: web.Request, root: Path, allowed: set[str], max_bytes: int) -> Path:
+    """Enregistre le fichier d'un envoi multipart (champ « file ») sans jamais écraser un fichier existant."""
+    reader = await request.multipart()
+    part = await reader.next()
+    if part is None or part.name != "file" or not part.filename:
+        raise web.HTTPBadRequest(text="Fichier manquant")
+    clean = re.sub(r"[^\w.\-]", "_", Path(part.filename).name) or "fichier"
+    if clean.rsplit(".", 1)[-1].lower() not in allowed:
+        raise web.HTTPBadRequest(text=f"Format non pris en charge ({', '.join(sorted(allowed))})")
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / clean
+    counter = 1
+    while target.exists():
+        target = root / f"{Path(clean).stem}-{counter}{Path(clean).suffix}"
+        counter += 1
+    size = 0
+    try:
+        with target.open("wb") as handle:
+            while chunk := await part.read_chunk():
+                size += len(chunk)
+                if size > max_bytes:
+                    raise web.HTTPRequestEntityTooLarge(max_size=max_bytes, actual_size=size)
+                handle.write(chunk)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return target
+
+
+def media_entry(media_dir: str, path: Path) -> dict[str, Any]:
+    rel = path.relative_to(Path(media_dir)).as_posix()
+    ext = path.suffix.lower().lstrip(".")
+    return {"name": path.name, "path": rel, "content_id": f"media-source://media/{rel}",
+            "kind": "video" if ext in VIDEO_EXT else "audio", "deletable": rel.startswith(f"{MEDIA_UPLOAD_DIR}/")}
+
+
 def list_media(media_dir: str) -> list[dict[str, str]]:
     root = Path(media_dir)
     files: list[dict[str, str]] = []
@@ -118,12 +155,9 @@ def list_media(media_dir: str) -> list[dict[str, str]]:
             "path": rel,
             "content_id": f"media-source://media/{rel}",
             "kind": "video" if ext in VIDEO_EXT else "audio",
+            "deletable": rel.startswith(f"{MEDIA_UPLOAD_DIR}/"),
         })
     return files
-
-
-def event_key(entity_id: str, start: str, summary: str) -> str:
-    return f"{entity_id}|{start}|{summary}"
 
 
 def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
@@ -165,7 +199,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         from . import schedule
         settings = storage.config["settings"]
         return web.json_response({
-            "days": schedule.build_board(storage.tasks, storage.config["shown_events"],
+            "days": schedule.build_board(storage.tasks, engine.visible_events(),
                                          engine.now().date(), int(settings["days_published"])),
             "settings": {
                 "background_url": background_url(settings),
@@ -190,29 +224,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
 
     @routes.post("/api/images")
     async def upload_image(request: web.Request) -> web.Response:
-        reader = await request.multipart()
-        part = await reader.next()
-        if part is None or part.name != "file" or not part.filename:
-            raise web.HTTPBadRequest(text="Fichier manquant")
-        clean = re.sub(r"[^\w.\-]", "_", Path(part.filename).name) or "image"
-        if clean.rsplit(".", 1)[-1].lower() not in IMAGE_EXT:
-            raise web.HTTPBadRequest(text="Format d'image non pris en charge (jpg, png, webp, gif)")
-        root = image_roots(engine)["upload"]
-        root.mkdir(parents=True, exist_ok=True)
-        target = root / clean
-        counter = 1
-        while target.exists():
-            target = root / f"{Path(clean).stem}-{counter}{Path(clean).suffix}"
-            counter += 1
-        size = 0
-        with target.open("wb") as handle:
-            while chunk := await part.read_chunk():
-                size += len(chunk)
-                if size > MAX_IMAGE_BYTES:
-                    handle.close()
-                    target.unlink(missing_ok=True)
-                    raise web.HTTPRequestEntityTooLarge(max_size=MAX_IMAGE_BYTES, actual_size=size)
-                handle.write(chunk)
+        target = await save_upload(request, image_roots(engine)["upload"], IMAGE_EXT, MAX_IMAGE_BYTES)
         return web.json_response({"source": "upload", "name": target.name, "value": f"upload:{target.name}",
                                   "url": f"api/image/upload/{target.name}"})
 
@@ -231,6 +243,8 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     @routes.put("/api/config")
     async def put_config(request: web.Request) -> web.Response:
         config = storage.set_config(await body(request))
+        await engine.refresh_calendars()
+        await publish()
         return web.json_response(config)
 
     @routes.get("/api/entities")
@@ -248,6 +262,31 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     @routes.get("/api/media")
     async def media(_: web.Request) -> web.Response:
         return web.json_response(list_media(engine.media_dir))
+
+    @routes.post("/api/media")
+    async def upload_media(request: web.Request) -> web.Response:
+        limit = int(float(storage.config["settings"].get("media_max_mb", 500)) * 1024 * 1024)
+        root = Path(engine.media_dir) / MEDIA_UPLOAD_DIR
+        try:
+            target = await save_upload(request, root, VIDEO_EXT | AUDIO_EXT, limit)
+        except PermissionError:
+            raise web.HTTPInternalServerError(text="Dossier média en lecture seule : l'add-on doit avoir accès en écriture à /media")
+        engine.log("info", f"Média ajouté : {target.name}")
+        return web.json_response(media_entry(engine.media_dir, target))
+
+    @routes.delete("/api/media/{path:.+}")
+    async def delete_media(request: web.Request) -> web.Response:
+        root = (Path(engine.media_dir) / MEDIA_UPLOAD_DIR).resolve()
+        try:
+            path = (Path(engine.media_dir) / request.match_info["path"]).resolve()
+            path.relative_to(root)
+        except (ValueError, OSError):
+            raise web.HTTPForbidden(text="Seuls les médias ajoutés par l'add-on peuvent être supprimés")
+        if not path.is_file():
+            raise web.HTTPNotFound()
+        path.unlink()
+        engine.log("info", f"Média supprimé : {path.name}")
+        return web.json_response({"ok": True})
 
     @routes.get("/api/tasks")
     async def tasks(_: web.Request) -> web.Response:
@@ -310,7 +349,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         days = int(request.query.get("days", storage.config["settings"]["days_published"]))
         from . import schedule
         return web.json_response(schedule.build_board(
-            storage.tasks, storage.config["shown_events"], engine.now().date(), days))
+            storage.tasks, engine.visible_events(), engine.now().date(), days))
 
     @routes.get("/api/day")
     async def day(request: web.Request) -> web.Response:
@@ -323,44 +362,30 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
         return web.json_response({
             "date": target.isoformat(),
             "label": schedule.label_fr(target),
-            "items": schedule.items_for_day(storage.tasks, storage.config["shown_events"], target, False),
+            "items": schedule.items_for_day(storage.tasks, engine.visible_events(), target, False),
         })
 
     @routes.get("/api/calendar")
-    async def calendar(request: web.Request) -> web.Response:
-        days = int(request.query.get("days", 14))
-        start = engine.now()
-        end = start + timedelta(days=days)
-        shown = {e.get("key") for e in storage.config["shown_events"]}
-        result: list[dict[str, Any]] = []
-        for entity_id in storage.config["settings"].get("calendar_entities", []):
-            try:
-                events = await engine.ha.calendar_events(entity_id, start.isoformat(), end.isoformat())
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.warning("Calendrier %s indisponible : %s", entity_id, err)
-                continue
-            for event in events:
-                raw_start = event.get("start", {})
-                start_value = raw_start.get("dateTime") or raw_start.get("date") or ""
-                summary = str(event.get("summary") or "Événement")
-                key = event_key(entity_id, start_value, summary)
-                result.append({"key": key, "entity_id": entity_id, "summary": summary,
-                               "start": start_value, "shown": key in shown})
-        return web.json_response(result)
+    async def calendar(_: web.Request) -> web.Response:
+        """Événements importés automatiquement des calendriers cochés, avec leur état (masqué ou non)."""
+        hidden = set(storage.config["hidden_events"])
+        return web.json_response([{**event, "hidden": event["key"] in hidden} for event in engine.calendar_events])
 
-    @routes.put("/api/shown_events")
-    async def shown_events(request: web.Request) -> web.Response:
+    @routes.post("/api/calendar/refresh")
+    async def calendar_refresh(_: web.Request) -> web.Response:
+        await engine.refresh_calendars()
+        await publish()
+        return await calendar(_)
+
+    @routes.put("/api/hidden_events")
+    async def hidden_events(request: web.Request) -> web.Response:
         data = await request.json()
         if not isinstance(data, list):
             raise web.HTTPBadRequest(text="Liste attendue")
-        storage.config["shown_events"] = [
-            {"key": str(e.get("key")), "summary": str(e.get("summary") or ""),
-             "start": str(e.get("start") or ""), "entity_id": str(e.get("entity_id") or "")}
-            for e in data if e.get("key")
-        ]
+        storage.config["hidden_events"] = [str(key) for key in data]
         storage.save_config()
         await publish()
-        return web.json_response(storage.config["shown_events"])
+        return web.json_response(storage.config["hidden_events"])
 
     @routes.get("/api/journal")
     async def journal(_: web.Request) -> web.Response:

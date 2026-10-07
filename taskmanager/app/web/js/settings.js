@@ -26,6 +26,10 @@ const SETTING_GROUPS = [
     { key: 'tablet_home_path', label: 'Page à retrouver après un appel', kind: 'text',
       help: 'Chemin du dashboard de la tablette (facultatif), par exemple /lovelace/0.' },
   ] },
+  { title: 'Médias', hint: 'Vidéos et sons ajoutés depuis le Créateur (stockés dans /media/taskmanager).', fields: [
+    { key: 'media_max_mb', label: 'Taille maximale d\'un fichier ajouté', unit: 'Mo',
+      help: 'Au-delà, l\'envoi est refusé. Une vidéo de téléphone de quelques minutes pèse souvent 50 à 300 Mo.' },
+  ] },
   { title: 'Sous-tâches liées à un capteur', hint: 'Rejeu tant qu\'une condition reste vraie (par exemple : toujours au lit).', fields: [
     { key: 'sensor_loop_max_runs', label: 'Nombre maximal de répétitions', unit: 'fois',
       help: 'Garde-fou : arrête le rejeu après ce nombre de passages.' },
@@ -249,9 +253,11 @@ export const renderSettings = async (root) => {
 
   const calendarPanel = () => h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, 'Calendriers'),
-    h('p', { class: 'hint' }, 'Calendriers proposés dans le créateur de tâches pour choisir les événements à afficher sur la tablette.'),
+    h('p', { class: 'hint' }, 'Les événements des calendriers cochés sont importés automatiquement dans le fil de la tablette. Les événements à masquer se choisissent dans le Créateur.'),
     entityChecklist({ entities, domains: DOMAINS.calendar, values: config.settings.calendar_entities || [],
-      onChange: (values) => { config.settings.calendar_entities = values; } }));
+      onChange: (values) => { config.settings.calendar_entities = values; } }),
+    h('div', { class: 'settings-grid' }, settingField({ key: 'calendar_refresh_minutes', label: 'Actualisation des calendriers',
+      unit: 'minutes', help: 'Fréquence de lecture des agendas. Enregistrer la configuration actualise aussi tout de suite.' })));
 
   const advancedPanel = () => h('details', { class: 'panel' },
     h('summary', { class: 'panel-title' }, 'Avancé : style de la vidéo'),

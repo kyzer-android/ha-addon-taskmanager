@@ -1,6 +1,6 @@
 // Vue tablette : fil du jour en très gros caractères (bandeau vert, jours adaptés à la largeur).
 import { api } from './api.js';
-import { h, clear } from './dom.js';
+import { h, clear, toast } from './dom.js';
 
 const REFRESH_MS = 30000;
 const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -38,10 +38,18 @@ const dayBlock = (day, now, isToday) => {
 
 /**
  * Affiche la vue tablette dans `root`.
- * options.standalone : plein écran (compte « tablette »), sinon aperçu dans l'interface de gestion.
+ * options.standalone : plein écran (compte « tablette »).
+ * options.preview    : aperçu dans l'interface de gestion, pleine largeur, avec un bouton « Plein écran ».
  */
 export const renderTablet = async (root, _context, _show, options = {}) => {
   const view = h('div', { class: `tablet-view ${options.standalone ? 'is-standalone' : ''}` });
+  if (options.preview) {
+    root.append(h('div', { class: 'tablet-toolbar' },
+      h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
+        try { await view.requestFullscreen(); } catch (error) { toast('Plein écran refusé ici : essaie F11 dans le navigateur'); }
+      } }, '⛶ Plein écran'),
+      h('span', { class: 'hint' }, 'Rendu exact de ce que voit la tablette.')));
+  }
   root.append(view);
   let data = await api.tablet();
   let width = 0;

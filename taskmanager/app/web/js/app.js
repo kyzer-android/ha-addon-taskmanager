@@ -12,7 +12,8 @@ const pages = [
   { id: 'timeline', label: 'Fil de la journée', render: renderTimeline },
   { id: 'creator', label: 'Créateur', render: renderCreator },
   { id: 'archive', label: 'Archive', render: renderArchive },
-  { id: 'tablet', label: 'Vue tablette', render: renderTablet },
+  { id: 'tablet', label: 'Vue tablette', wide: true,
+    render: (root, ctx, showPage) => renderTablet(root, ctx, showPage, { preview: true }) },
   { id: 'settings', label: 'Configuration', render: renderSettings },
   { id: 'journal', label: 'Journal', render: renderJournal },
 ];
@@ -26,6 +27,7 @@ const show = async (pageId) => {
   nav.querySelectorAll('.app-nav-link').forEach((link) => {
     link.classList.toggle('is-active', link.dataset.page === page.id);
   });
+  document.body.classList.toggle('is-wide', Boolean(page.wide));
   clear(main);
   try {
     await page.render(main, context, show);

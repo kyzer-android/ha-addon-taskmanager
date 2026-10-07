@@ -14,7 +14,7 @@ Détails d'utilisation : [`taskmanager/DOCS.md`](taskmanager/DOCS.md).
 
 ## État du projet
 
-Version **0.3.0** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
+Version **0.4.0** : première implémentation complète du [cahier des charges](docs/cahier-des-charges.md).
 
 | Fonction | État |
 |---|---|
@@ -25,6 +25,8 @@ Version **0.3.0** : première implémentation complète du [cahier des charges](
 | Écran allumé seulement s'il est éteint | ✅ |
 | Appels entrants (ferme la vidéo, Call Card plein écran) et appel d'escalade | ✅ (à valider sur la vraie installation) |
 | Interface de gestion (Ingress) avec créateur à tuiles | ✅ |
+| Médias : ajout de vidéos/sons (fichier ou caméra du téléphone), suppression de ses propres fichiers | ✅ |
+| Agendas : import automatique des calendriers cochés, masquage d'un événement | ✅ |
 | Vue tablette (page de l'add-on, fond au choix, jours adaptés à la largeur) et rôles aidant / tablette | ✅ voir [`docs/vue-tablette.md`](docs/vue-tablette.md) |
 | Réponse vocale par IA | ⏳ V2 (point d'entrée `POST /api/answer` déjà prêt) |
 

@@ -77,6 +77,27 @@ def event_day_and_time(event: dict[str, Any]) -> tuple[date | None, str]:
         return None, ALL_DAY_LABEL
 
 
+def event_key(entity_id: str, start: str, summary: str) -> str:
+    return f"{entity_id}|{start}|{summary}"
+
+
+def event_days(event: dict[str, Any]) -> list[date]:
+    """Jours où un événement apparaît (un événement « journée entière » multi-jours couvre chaque jour)."""
+    first, _ = event_day_and_time(event)
+    if first is None:
+        return []
+    start = str(event.get("start") or "")
+    end = str(event.get("end") or "")
+    if "T" in start or not end or "T" in end:
+        return [first]
+    try:
+        last = date.fromisoformat(end)  # fin exclusive pour une journée entière
+    except ValueError:
+        return [first]
+    days = [first + timedelta(days=offset) for offset in range((last - first).days)]
+    return days or [first]
+
+
 def items_for_day(
     tasks: list[dict[str, Any]],
     shown_events: list[dict[str, Any]],
@@ -97,8 +118,8 @@ def items_for_day(
                 "id": task["id"],
             })
     for event in shown_events:
-        event_day, label = event_day_and_time(event)
-        if event_day == day:
+        _, label = event_day_and_time(event)
+        if day in event_days(event):
             items.append({
                 "time": label,
                 "title": str(event.get("summary") or "Événement"),

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+- **Médias** : ajout de vidéos et de sons depuis le Créateur (fichier, ou « Filmer / Enregistrer avec le téléphone » via l'appli native), avec barre de progression ; suppression des fichiers ajoutés par l'add-on. Stockage dans `/media/taskmanager/` : le dossier média est maintenant monté en écriture (`media:rw`). Taille maximale réglable.
+- **Agendas automatiques** : les événements des calendriers cochés arrivent seuls dans le fil (actualisation toutes les 10 min, bouton « Actualiser »). On peut masquer un événement. Les événements « journée entière » sur plusieurs jours apparaissent chaque jour.
+- **Créateur** : le bouton « Tous les jours » devient « Aucun jour » quand les 7 jours sont cochés.
+- **Vue tablette** : l'onglet est en pleine largeur et pleine hauteur, avec un bouton « Plein écran ».
+
 ## 0.3.0
 - **Utilisateurs** : la section « Aidants » devient « Utilisateurs » (compte Home Assistant choisi dans une liste, rôle Aidant ou Tablette, extension SIP pour les aidants). Les anciens aidants sont repris automatiquement.
 - **Rôles côté serveur** : un administrateur HA voit toujours l'interface complète ; un compte « Tablette » ne voit que le fil du jour, en lecture seule (le reste de l'API lui est refusé).

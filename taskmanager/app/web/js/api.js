@@ -34,7 +34,24 @@ export const api = {
   runTask: (id) => request('POST', `api/tasks/${id}/run`, {}),
   duplicate: (id, date) => request('POST', `api/tasks/${id}/duplicate`, { date }),
   day: (date) => request('GET', `api/day?date=${date}`),
-  calendar: () => request('GET', 'api/calendar?days=14'),
-  saveShownEvents: (events) => request('PUT', 'api/shown_events', events),
+  calendar: () => request('GET', 'api/calendar'),
+  refreshCalendar: () => request('POST', 'api/calendar/refresh', {}),
+  saveHiddenEvents: (keys) => request('PUT', 'api/hidden_events', keys),
+  deleteMedia: (path) => request('DELETE', `api/media/${path.split('/').map(encodeURIComponent).join('/')}`),
+  // Envoi avec progression (fetch ne sait pas la suivre).
+  uploadMedia: (file, onProgress) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/media');
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+    xhr.onload = () => {
+      if (xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+      else if (xhr.status === 413) reject(new Error('fichier trop gros (limite réglable dans Configuration)'));
+      else reject(new Error(xhr.responseText || `envoi refusé (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('connexion interrompue'));
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  }),
   journal: () => request('GET', 'api/journal'),
 };

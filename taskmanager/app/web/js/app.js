@@ -1,0 +1,54 @@
+import { api } from './api.js';
+import { h, clear, toast } from './dom.js';
+import { renderTimeline } from './timeline.js';
+import { renderCreator } from './creator.js';
+import { renderArchive } from './archive.js';
+import { renderSettings } from './settings.js';
+import { renderJournal } from './journal.js';
+
+const pages = [
+  { id: 'timeline', label: 'Fil de la journée', render: renderTimeline },
+  { id: 'creator', label: 'Créateur', render: renderCreator },
+  { id: 'archive', label: 'Archive', render: renderArchive },
+  { id: 'settings', label: 'Configuration', render: renderSettings },
+  { id: 'journal', label: 'Journal', render: renderJournal },
+];
+
+const context = { editTask: null };
+const main = document.getElementById('appMain');
+const nav = document.getElementById('appNav');
+
+const show = async (pageId) => {
+  const page = pages.find((item) => item.id === pageId) || pages[0];
+  nav.querySelectorAll('.app-nav-link').forEach((link) => {
+    link.classList.toggle('is-active', link.dataset.page === page.id);
+  });
+  clear(main);
+  try {
+    await page.render(main, context, show);
+  } catch (error) {
+    main.append(h('p', { class: 'panel' }, `Erreur : ${error.message}`));
+  }
+};
+
+const fillEntityList = async () => {
+  try {
+    const list = document.getElementById('entityList');
+    (await api.entities()).forEach((entity) => {
+      list.append(h('option', { value: entity.entity_id }, entity.name));
+    });
+  } catch (error) {
+    toast('Entités Home Assistant indisponibles');
+  }
+};
+
+pages.forEach((page) => {
+  nav.append(h('button', {
+    class: 'app-nav-link',
+    'data-page': page.id,
+    onclick: () => show(page.id),
+  }, page.label));
+});
+
+fillEntityList();
+show('timeline');

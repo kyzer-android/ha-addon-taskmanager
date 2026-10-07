@@ -1,0 +1,564 @@
+"""Moteur : planification, lecture des médias, questions OUI/NON, appels et escalade.
+
+Tout passe par les services de base de Home Assistant (Browser Mod, media_player,
+homeassistant.turn_on). Aucun script ni automatisation n'est créé dans HA.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time as time_module
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Awaitable, Callable
+from zoneinfo import ZoneInfo
+
+from . import models, schedule
+from .rooms import BUSY_STATE, choose_rooms, is_in_call, state_of
+from .storage import Storage
+
+_LOGGER = logging.getLogger(__name__)
+
+BOARD_ENTITY = "sensor.taskmanager_fil_du_jour"
+ANSWER_SEPARATOR = "|"
+AUDIO_TYPES = {
+    "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4",
+    "aac": "audio/aac", "ogg": "audio/ogg", "flac": "audio/flac",
+}
+CALL_STYLES = """ha-dialog {
+  --dialog-content-padding: 0;
+  --padding-x: 0px;
+  --padding-y: 0px;
+  --ha-dialog-surface-background: black;
+  --ha-card-background: black;
+  --primary-text-color: white;
+  color: white;
+}
+.content,
+.container .content,
+.content .container {
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: black;
+  scrollbar-width: none;
+}
+.content::-webkit-scrollbar {
+  display: none;
+}"""
+CALL_CARD_STYLE = """ha-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: black;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+#remoteVideo {
+  max-height: calc(100vh - 12px);
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
+}"""
+
+
+@dataclass
+class PendingQuestion:
+    rid: str
+    rooms: list[dict[str, Any]]
+    future: asyncio.Future = field(default_factory=lambda: asyncio.get_running_loop().create_future())
+
+
+def normalize_answer(value: str) -> str:
+    text = (value or "").strip().lower()
+    if text in ("oui", "yes", "o", "y", "true"):
+        return "oui"
+    if text in ("non", "no", "n", "false"):
+        return "non"
+    return "indéterminé"
+
+
+class Engine:
+    def __init__(
+        self,
+        storage: Storage,
+        ha: Any,
+        media_dir: str = "/media",
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        tz: ZoneInfo | None = None,
+    ) -> None:
+        self.storage = storage
+        self.ha = ha
+        self.media_dir = media_dir
+        self.sleep = sleep
+        self.tz = tz or ZoneInfo("UTC")
+        self.runs: dict[str, asyncio.Task] = {}
+        self.questions: dict[str, PendingQuestion] = {}
+        self.display_lock = asyncio.Lock()
+        self._tasks: list[asyncio.Task] = []
+        self._warned_no_browser: set[str] = set()
+
+    # ---- raccourcis -----------------------------------------------------------
+    @property
+    def config(self) -> dict[str, Any]:
+        return self.storage.config
+
+    @property
+    def settings(self) -> dict[str, Any]:
+        return self.storage.config["settings"]
+
+    def now(self) -> datetime:
+        return datetime.now(self.tz)
+
+    def log(self, level: str, message: str, **extra: Any) -> None:
+        self.storage.log(level, message, **extra)
+
+    # ---- démarrage / arrêt ------------------------------------------------------
+    async def start(self) -> None:
+        try:
+            cfg = await self.ha.get_config()
+            self.tz = ZoneInfo(cfg.get("time_zone") or "UTC")
+        except Exception as err:  # noqa: BLE001
+            self.log("warning", f"Fuseau horaire de HA indisponible ({err}), UTC utilisé")
+        self.ha.listeners.append(self.on_event)
+        self._tasks.append(asyncio.create_task(self._scheduler_loop(), name="scheduler"))
+        self._tasks.append(asyncio.create_task(self._board_loop(), name="board"))
+        self.log("info", "Moteur démarré")
+
+    async def stop(self) -> None:
+        for task in [*self._tasks, *self.runs.values()]:
+            task.cancel()
+        await asyncio.gather(*self._tasks, *self.runs.values(), return_exceptions=True)
+
+    async def _scheduler_loop(self) -> None:
+        while True:
+            try:
+                await self.tick()
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Erreur dans la planification")
+            await self.sleep(10)
+
+    async def _board_loop(self) -> None:
+        while True:
+            try:
+                await self.publish_board()
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Publication du fil du jour impossible : %s", err)
+            await self.sleep(60)
+
+    # ---- planification ------------------------------------------------------------
+    async def tick(self) -> list[str]:
+        """Déclenche les tâches échues. Retourne les identifiants lancés."""
+        now = self.now()
+        grace = float(self.settings.get("grace_minutes", 5))
+        launched: list[str] = []
+        changed = False
+        for task in self.storage.tasks:
+            if schedule.is_missed_once(task, now.date()):
+                task["archived"] = True
+                task["last_status"] = task.get("last_status") or "manquée"
+                changed = True
+                continue
+            if schedule.is_due(task, now, grace) and task["id"] not in self.runs:
+                task["last_run_date"] = now.date().isoformat()
+                changed = True
+                self.start_task(task)
+                launched.append(task["id"])
+        if changed:
+            self.storage.save_tasks()
+        return launched
+
+    def start_task(self, task: dict[str, Any]) -> bool:
+        if task["id"] in self.runs:
+            return False
+        run = asyncio.create_task(self._run_task(task), name=f"task-{task['id']}")
+        self.runs[task["id"]] = run
+        run.add_done_callback(lambda _t, tid=task["id"]: self.runs.pop(tid, None))
+        return True
+
+    async def _run_task(self, task: dict[str, Any]) -> None:
+        self.log("info", f"Tâche lancée : {task['title']}", task_id=task["id"])
+        status = "terminée"
+        try:
+            outcome = await self.run_node(task["root"])
+            if outcome:
+                status = {"yes": "réponse OUI", "no": "réponse NON", "no_answer": "sans réponse"}[outcome]
+        except asyncio.CancelledError:
+            status = "interrompue"
+            raise
+        except Exception as err:  # noqa: BLE001
+            status = f"erreur : {err}"
+            self.log("warning", f"Erreur pendant « {task['title']} » : {err}", task_id=task["id"])
+        finally:
+            task["last_status"] = status
+            if task["schedule"]["type"] == "once":
+                task["archived"] = True
+            self.storage.save_tasks()
+            self.log("info", f"Tâche terminée : {task['title']} ({status})", task_id=task["id"])
+
+    # ---- exécution d'un nœud ------------------------------------------------------
+    async def run_node(self, node: dict[str, Any]) -> str | None:
+        """Exécute un nœud puis ses sous-tâches. Retourne yes / no / no_answer / None."""
+        media = node.get("media") or {}
+        has_media = media.get("kind") in ("video", "audio") and media.get("content_id")
+        outcome: str | None = None
+        if node.get("question"):
+            outcome = await self._ask(node)
+        elif has_media:
+            async with self.display_lock:
+                rooms = choose_rooms(self.config, self.ha.states, "media")
+                if not rooms:
+                    self.log("warning", f"Aucune tablette disponible pour « {node.get('title')} »")
+                else:
+                    started = await self._start_playback(rooms, media)
+                    await self._finish_playback(started, media)
+        await self._run_children(node, outcome)
+        return outcome
+
+    async def _run_children(self, node: dict[str, Any], outcome: str | None) -> None:
+        for child in node.get("children", []):
+            trigger = child["trigger"]
+            if trigger in ("yes", "no", "no_answer"):
+                if trigger == outcome:
+                    await self.run_node(child["node"])
+            elif trigger == "sensor":
+                await self._run_sensor_child(child)
+
+    async def _run_sensor_child(self, child: dict[str, Any]) -> None:
+        sensor = child.get("sensor") or {}
+        entity = sensor.get("entity_id")
+        if not entity:
+            return
+        wanted = sensor.get("state", "on")
+        pause = float(sensor.get("repeat_minutes", 10)) * 60
+        for _ in range(int(self.settings.get("sensor_loop_max_runs", 24))):
+            if self.ha.state(entity) != wanted:
+                return
+            await self.run_node(child["node"])
+            await self.sleep(pause)
+
+    # ---- lecture -------------------------------------------------------------------
+    def _browser_id(self, room: dict[str, Any]) -> str:
+        browser_id = room.get("browser_id", "")
+        if not browser_id and room.get("id") not in self._warned_no_browser:
+            self._warned_no_browser.add(room.get("id", ""))
+            self.log("warning", f"Pas de Browser ID pour la pièce « {room.get('name')} » : popups impossibles")
+        return browser_id
+
+    async def _close_popup(self, room: dict[str, Any], tag: str) -> None:
+        browser_id = self._browser_id(room)
+        if not browser_id:
+            return
+        try:
+            await self.ha.call_service("browser_mod", "close_popup",
+                                       {"browser_id": [browser_id], "tag": tag})
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("close_popup (%s) a échoué : %s", tag, err)
+
+    async def _stop_media(self, room: dict[str, Any]) -> None:
+        try:
+            await self.ha.call_service("media_player", "media_stop",
+                                       {"entity_id": room["media_player"]})
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("media_stop a échoué : %s", err)
+
+    async def _ensure_screen(self, room: dict[str, Any]) -> None:
+        """L'écran est normalement toujours allumé : on ne l'allume que s'il est éteint."""
+        screen = room.get("screen")
+        if not screen or self.ha.state(screen) == "on":
+            return
+        await self.ha.call_service("homeassistant", "turn_on", {"entity_id": screen})
+        await self.sleep(float(self.settings.get("screen_wait_seconds", 1)))
+
+    async def _wait_until(self, predicate: Callable[[], bool], timeout: float | None) -> bool:
+        waited = 0.0
+        while not predicate():
+            if timeout is not None and waited >= timeout:
+                return False
+            await self.sleep(0.5)
+            waited += 0.5
+        return True
+
+    def _is_playing(self, room: dict[str, Any]) -> bool:
+        return self.ha.state(room["media_player"]) == "playing"
+
+    async def _play_on_room(self, room: dict[str, Any], media: dict[str, Any]) -> bool:
+        kind = media["kind"]
+        content_id = media["content_id"]
+        try:
+            await self._ensure_screen(room)
+            if kind == "video":
+                data: dict[str, Any] = {
+                    "entity_id": room["media_player"],
+                    "extra": {"popup": {
+                        "initial_style": "fullscreen",
+                        "tag": "video",
+                        "dismissable": False,
+                        "popup_styles": [{"style": "all", "styles": self.settings.get("video_style", "")}],
+                    }},
+                    "media": {"media_content_id": content_id, "media_content_type": "video/mp4"},
+                }
+            else:
+                extension = content_id.rsplit(".", 1)[-1].lower()
+                data = {
+                    "entity_id": room["media_player"],
+                    "media": {"media_content_id": content_id,
+                              "media_content_type": AUDIO_TYPES.get(extension, "audio/mpeg")},
+                }
+            await self.ha.call_service("media_player", "play_media", data)
+        except Exception as err:  # noqa: BLE001
+            self.log("warning", f"Lecture impossible sur « {room.get('name')} » : {err}")
+            return False
+        started = await self._wait_until(
+            lambda: self._is_playing(room), float(self.settings.get("start_timeout_seconds", 10))
+        )
+        if not started:
+            self.log("warning", f"La lecture n'a pas démarré sur « {room.get('name')} »")
+            if kind == "video":
+                await self._close_popup(room, "video")
+        return started
+
+    async def _start_playback(self, rooms: list[dict[str, Any]], media: dict[str, Any]) -> list[dict[str, Any]]:
+        results = await asyncio.gather(*(self._play_on_room(r, media) for r in rooms))
+        return [room for room, ok in zip(rooms, results) if ok]
+
+    async def _finish_playback(self, rooms: list[dict[str, Any]], media: dict[str, Any]) -> None:
+        """Attend la fin de la lecture (sans limite de durée) puis ferme le popup vidéo."""
+        async def one(room: dict[str, Any]) -> None:
+            await self._wait_until(
+                lambda: not self._is_playing(room) or is_in_call(room, self.ha.states), None
+            )
+            if media["kind"] == "video":
+                await self._close_popup(room, "video")
+
+        await asyncio.gather(*(one(r) for r in rooms))
+
+    # ---- questions ------------------------------------------------------------------
+    def _question_card(self, text: str, rid: str, room_id: str) -> dict[str, Any]:
+        def button(label: str, value: str, color: str, icon: str) -> dict[str, Any]:
+            return {
+                "type": "button", "name": label, "icon": icon,
+                "show_name": True, "show_icon": True,
+                "tap_action": {
+                    "action": "perform-action", "perform_action": "logbook.log",
+                    "data": {"name": "taskmanager", "domain": "taskmanager",
+                             "message": ANSWER_SEPARATOR.join(["answer", rid, room_id, value])},
+                },
+                "card_mod": {"style": (
+                    f"ha-card {{ height: 160px; font-size: 44px; font-weight: bold; "
+                    f"background: {color}; color: white; }}"
+                )},
+            }
+
+        return {"type": "vertical-stack", "cards": [
+            {"type": "markdown", "content": f"# {text}",
+             "card_mod": {"style": "ha-card { text-align: center; font-size: 36px; }"}},
+            {"type": "horizontal-stack", "cards": [
+                button("OUI", "oui", "#2e7d32", "mdi:check-bold"),
+                button("NON", "non", "#c62828", "mdi:close-thick"),
+            ]},
+        ]}
+
+    async def _open_question(self, pq: PendingQuestion, text: str, rooms: list[dict[str, Any]]) -> None:
+        seconds = float(self.settings.get("question_seconds", 60))
+        for room in rooms:
+            browser_id = self._browser_id(room)
+            if not browser_id:
+                continue
+            try:
+                await self._ensure_screen(room)
+                await self.ha.call_service("browser_mod", "popup", {
+                    "browser_id": [browser_id],
+                    "tag": "question",
+                    "initial_style": "wide",
+                    "dismissable": False,
+                    "timeout": int(seconds * 1000),
+                    "content": self._question_card(text, pq.rid, room.get("id", "")),
+                })
+            except Exception as err:  # noqa: BLE001
+                self.log("warning", f"Question impossible sur « {room.get('name')} » : {err}")
+
+    async def _ask(self, node: dict[str, Any]) -> str:
+        question = node["question"]
+        media = node.get("media") or {}
+        has_media = media.get("kind") in ("video", "audio") and media.get("content_id")
+        attempts = int(question.get("repeats", 0)) + 1
+        seconds = float(self.settings.get("question_seconds", 60))
+        outcome = "no_answer"
+        for attempt in range(attempts):
+            answered: tuple[str, str] | None = None
+            async with self.display_lock:
+                rooms = choose_rooms(self.config, self.ha.states, "media")
+                if not rooms:
+                    self.log("warning", f"Aucune tablette disponible pour la question « {question['text']} »")
+                else:
+                    pq = PendingQuestion(rid=models.new_id("q"), rooms=rooms)
+                    self.questions[pq.rid] = pq
+                    started = rooms
+                    playback: asyncio.Task | None = None
+                    if has_media:
+                        started = await self._start_playback(rooms, media)
+                        playback = asyncio.create_task(self._finish_playback(started, media))
+                    await self._open_question(pq, question["text"], rooms)
+                    try:
+                        answered = await asyncio.wait_for(asyncio.shield(pq.future), seconds)
+                    except asyncio.TimeoutError:
+                        answered = None
+                    finally:
+                        self.questions.pop(pq.rid, None)
+                    await self._close_after_question(rooms, answered)
+                    if playback:
+                        # Les autres tablettes ont été arrêtées ; la vidéo de la tablette
+                        # qui a répondu se termine normalement avant de libérer l'écran.
+                        await asyncio.gather(playback, return_exceptions=True)
+            if answered:
+                return "yes" if answered[0] == "oui" else "no"
+            if attempt < attempts - 1:
+                self.log("info", f"Pas de réponse (essai {attempt + 1}/{attempts}), nouvelle tentative")
+                await self.sleep(float(question.get("delay_minutes", 0)) * 60)
+        self.log("info", f"Pas de réponse à « {question['text']} »")
+        if (node.get("escalation") or {}).get("enabled"):
+            await self._escalate(node["escalation"])
+        return outcome
+
+    async def _close_after_question(self, rooms: list[dict[str, Any]], answered: tuple[str, str] | None) -> None:
+        """Ferme la question partout ; ferme aussi la vidéo des autres tablettes si répondu."""
+        answered_room = answered[1] if answered else None
+        for room in rooms:
+            await self._close_popup(room, "question")
+            if answered and room.get("id") != answered_room:
+                await self._stop_media(room)
+                await self._close_popup(room, "video")
+
+    def submit_answer(self, rid: str, value: str, source: str = "bouton",
+                      text: str = "", room_id: str = "") -> bool:
+        """Point d'entrée des réponses (boutons aujourd'hui, IA demain)."""
+        normalized = normalize_answer(value)
+        pq = self.questions.get(rid)
+        self.log("info", f"Réponse « {normalized} » (source : {source})",
+                 source=source, text=text, value=normalized)
+        if not pq or pq.future.done() or normalized == "indéterminé":
+            return False
+        pq.future.set_result((normalized, room_id))
+        return True
+
+    # ---- appels -----------------------------------------------------------------------
+    def _in_call(self, room: dict[str, Any]) -> bool:
+        return is_in_call(room, self.ha.states)
+
+    def _extensions_map(self) -> dict[str, dict[str, str]]:
+        names: dict[str, dict[str, str]] = {}
+        for room in self.config["rooms"]:
+            if room.get("extension"):
+                names[str(room["extension"])] = {"name": room.get("name", "")}
+        for person in self.config["caregivers"]:
+            if person.get("extension"):
+                names[str(person["extension"])] = {"name": person.get("name", "")}
+        return names
+
+    async def on_event(self, kind: str, data: dict[str, Any]) -> None:
+        if kind == "state_changed":
+            entity = data.get("entity_id")
+            new_state = (data.get("new_state") or {}).get("state")
+            old_state = (data.get("old_state") or {}).get("state")
+            for room in self.config["rooms"]:
+                if room.get("call_sensor") == entity:
+                    if new_state == BUSY_STATE and old_state != BUSY_STATE:
+                        await self.show_call(room)
+                    elif old_state == BUSY_STATE and new_state != BUSY_STATE:
+                        await self.hide_call(room)
+        elif kind == "logbook_entry" and data.get("name") == "taskmanager":
+            parts = str(data.get("message", "")).split(ANSWER_SEPARATOR)
+            if len(parts) == 4 and parts[0] == "answer":
+                self.submit_answer(parts[1], parts[3], source="bouton", room_id=parts[2])
+
+    async def show_call(self, room: dict[str, Any]) -> None:
+        """Appel entrant : ferme la vidéo et la question, puis ouvre la Call Card."""
+        self.log("info", f"Appel sur « {room.get('name')} »")
+        await self._stop_media(room)
+        await self._close_popup(room, "video")
+        await self._close_popup(room, "question")
+        browser_id = self._browser_id(room)
+        if not browser_id:
+            return
+        try:
+            await self._ensure_screen(room)
+            await self.ha.call_service("browser_mod", "popup", {
+                "browser_id": [browser_id],
+                "initial_style": "fullscreen",
+                "dismissable": True,
+                "tag": "appel",
+                "popup_styles": [{"style": "all", "styles": CALL_STYLES}],
+                "content": {
+                    "type": "custom:sip-call-card",
+                    "extensions": self._extensions_map(),
+                    "buttons": [],
+                    "card_mod": {"style": CALL_CARD_STYLE},
+                },
+            })
+        except Exception as err:  # noqa: BLE001
+            self.log("warning", f"Popup d'appel impossible : {err}")
+
+    async def hide_call(self, room: dict[str, Any]) -> None:
+        await self._close_popup(room, "appel")
+
+    async def _place_call(self, room: dict[str, Any], person: dict[str, Any]) -> bool:
+        """Lance un appel depuis la tablette. Retourne True si l'appel semble avoir abouti."""
+        path = str(self.settings.get("call_url_template", "")).format(extension=person["extension"])
+        browser_id = self._browser_id(room)
+        if not browser_id or not path:
+            self.log("warning", "Appel impossible : Browser ID ou modèle d'URL d'appel manquant")
+            return False
+        await self._ensure_screen(room)
+        await self.ha.call_service("browser_mod", "navigate", {"browser_id": [browser_id], "path": path})
+        self.log("info", f"Appel de {person.get('name')} ({person['extension']}) depuis « {room.get('name')} »")
+        if not await self._wait_until(lambda: self._in_call(room), 15):
+            self.log("warning", "L'appel ne s'est pas établi")
+            return False
+        began = time_module.monotonic()
+        await self._wait_until(lambda: not self._in_call(room), float(self.settings.get("call_max_seconds", 600)))
+        lasted = time_module.monotonic() - began
+        return lasted >= float(self.settings.get("call_unanswered_seconds", 20))
+
+    async def _escalate(self, escalation: dict[str, Any]) -> None:
+        people = [p for p in self.config["caregivers"] if p.get("id") in escalation.get("caregiver_ids", [])]
+        if not people:
+            self.log("warning", "Escalade demandée mais aucun aidant sélectionné")
+            return
+        async with self.display_lock:
+            rooms = choose_rooms(self.config, self.ha.states, "call")
+            if not rooms:
+                self.log("warning", "Escalade impossible : aucune tablette disponible pour l'appel")
+                return
+            room = rooms[0]
+            for person in people:
+                if await self._place_call(room, person):
+                    break
+            home = self.settings.get("tablet_home_path")
+            if home and room.get("browser_id"):
+                await self.ha.call_service("browser_mod", "navigate",
+                                           {"browser_id": [room["browser_id"]], "path": home})
+
+    # ---- fil du jour ---------------------------------------------------------------------
+    def board(self) -> list[dict[str, Any]]:
+        return schedule.build_board(
+            self.storage.tasks, self.config.get("shown_events", []),
+            self.now().date(), int(self.settings.get("days_published", 4)),
+        )
+
+    async def publish_board(self) -> None:
+        board = self.board()
+        count = len(board[0]["items"]) if board else 0
+        await self.ha.set_state(BOARD_ENTITY, str(count), {
+            "friendly_name": "Fil du jour",
+            "icon": "mdi:calendar-check",
+            "days": board,
+            "updated": self.now().isoformat(timespec="seconds"),
+        })

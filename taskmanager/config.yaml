@@ -1,0 +1,25 @@
+name: "Gestionnaire de tâches"
+version: "0.1.0"
+slug: taskmanager
+description: "Rappels vidéo/audio, questions OUI/NON et appels d'escalade sur tablettes murales"
+url: "https://github.com/kyzer-android/ha-addon-taskmanager"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+ingress_entry: /
+panel_icon: mdi:calendar-check
+panel_title: Tâches
+homeassistant_api: true
+map:
+  - addon_config:rw
+  - media:ro
+options:
+  log_level: info
+schema:
+  log_level: list(debug|info|warning|error)

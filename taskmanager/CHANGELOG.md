@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+- Nouvelle carte Lovelace `custom:taskmanager-card` (style du dashboard des tablettes : bandeau vert, gros caractères, halo sur aujourd'hui, jours adaptés à la largeur). Installée et déclarée automatiquement par l'add-on (nécessite l'accès à la configuration de HA).
+- Configuration : paramètres généraux réorganisés par thème (Questions et lecture, Appels d'escalade, Sous-tâches, Vue tablette, Calendriers, Avancé), avec unités et aides ; état de la carte et YAML à copier.
+
 ## 0.1.5
 - Configuration : pièces, aidants et catalogue passent en cartes (Modifier / Supprimer). « Ajouter » et « Modifier » ouvrent une popup avec tous les champs les uns sous les autres, une aide sous chaque libellé et une validation des champs obligatoires.
 - Libellés clarifiés (Lecteur de la tablette, Écran de la tablette, État d'appel de la tablette, Extension SIP, Identifiant du navigateur, Détecteur de présence, Tablette par défaut).

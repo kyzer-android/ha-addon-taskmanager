@@ -73,7 +73,7 @@ def event_key(entity_id: str, start: str, summary: str) -> str:
     return f"{entity_id}|{start}|{summary}"
 
 
-def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
+def build_app(engine: Engine, web_dir: str | Path, card_status: dict[str, Any] | None = None) -> web.Application:
     app = IngressApplication(middlewares=[ingress_only])
     storage = engine.storage
     routes = web.RouteTableDef()
@@ -95,6 +95,10 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
             "running": list(engine.runs),
             "now": engine.now().isoformat(timespec="seconds"),
         })
+
+    @routes.get("/api/card")
+    async def card(_: web.Request) -> web.Response:
+        return web.json_response(card_status or {"resource": "unknown", "message": "", "yaml": "", "file": False})
 
     @routes.get("/api/config")
     async def get_config(_: web.Request) -> web.Response:

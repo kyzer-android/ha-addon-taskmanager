@@ -13,6 +13,7 @@ export const api = {
   status: () => request('GET', 'api/status'),
   config: () => request('GET', 'api/config'),
   saveConfig: (config) => request('PUT', 'api/config', config),
+  card: () => request('GET', 'api/card'),
   entities: () => request('GET', 'api/entities'),
   media: () => request('GET', 'api/media'),
   tasks: () => request('GET', 'api/tasks'),

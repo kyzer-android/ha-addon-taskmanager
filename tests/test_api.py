@@ -89,3 +89,10 @@ def test_ingress_repeated_slashes(engine):
         for path in ("////", "////css//app.css", "////api//status"):
             assert (await client.get(path)).status == 200, path
     with_client(engine, scenario)
+
+
+def test_card_status_route(engine):
+    async def scenario(client):
+        data = await (await client.get("/api/card")).json()
+        assert data["resource"] == "unknown"
+    with_client(engine, scenario)

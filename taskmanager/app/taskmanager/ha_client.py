@@ -99,6 +99,22 @@ class HaClient:
                     results[kind] = message.get("result") if message.get("success") else []
         return results
 
+    async def ws_call(self, kind: str, **params: Any) -> Any:
+        """Une commande WebSocket ponctuelle ; lève RuntimeError si HA la refuse."""
+        async with self.session.ws_connect(self.ws_url, heartbeat=30) as ws:
+            await ws.receive_json()
+            await ws.send_json({"type": "auth", "access_token": self.token})
+            reply = await ws.receive_json()
+            if reply.get("type") != "auth_ok":
+                raise RuntimeError(f"Authentification refusée : {reply}")
+            await ws.send_json({"id": 1, "type": kind, **params})
+            while True:
+                message = await asyncio.wait_for(ws.receive_json(), timeout=15)
+                if message.get("type") == "result" and message.get("id") == 1:
+                    if not message.get("success"):
+                        raise RuntimeError((message.get("error") or {}).get("message", "commande refusée"))
+                    return message.get("result")
+
     async def registry(self) -> dict[str, dict[str, Any]]:
         """Pièces et appareils des entités : {entity_id: {area, device}} (vide si indisponible)."""
         try:

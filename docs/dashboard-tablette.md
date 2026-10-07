@@ -1,38 +1,28 @@
-# Vue tablette : fil du jour
+# Vue tablette : carte « Fil du jour »
 
-L'add-on publie dans HA une entité `sensor.taskmanager_fil_du_jour` (mise à jour chaque minute et à chaque modification d'une tâche).
-Son état est le nombre d'éléments du jour. Son attribut `days` contient, pour chaque jour publié (4 par défaut, réglable) :
-`date`, `label` (ex. « mercredi 7 octobre ») et `items` (liste de `time`, `title`, `kind` = `task` ou `event`).
+L'add-on fournit une **carte Lovelace personnalisée** (`custom:taskmanager-card`) qui reprend le style du dashboard des tablettes :
+bandeau vert « Aujourd'hui : jour date », très gros caractères (30–35 px), halo sur le jour courant, éléments passés estompés.
 
-Seules les tâches **visibles** (icône 👁️) et les événements de calendrier choisis y figurent.
+Elle lit l'entité `sensor.taskmanager_fil_du_jour` publiée par l'add-on (mise à jour chaque minute et à chaque modification d'une tâche). Seules les tâches **visibles** (👁️) et les événements de calendrier choisis y figurent.
 
-Cette approche passe par une simple carte Markdown : pas d'iframe, donc pas de souci de contenu mixte avec un HA en HTTPS.
+## Installation (automatique)
 
-## Exemple : une carte par jour dans une vue de type « sections »
+Au démarrage, l'add-on copie `taskmanager-card.js` dans `<config HA>/www/taskmanager/` et le déclare comme ressource Lovelace (`/local/taskmanager/taskmanager-card.js`).
+Cela demande l'accès à la configuration de HA (`homeassistant_config:rw` dans `config.yaml`).
+L'état de l'installation est affiché dans **Configuration → Vue tablette**. Si les dashboards sont en mode YAML, ajoute la ressource à la main (Paramètres → Tableaux de bord → Ressources, type « module JavaScript »).
 
-Dans une vue `sections`, les cartes se replacent toutes seules selon la largeur de l'écran : c'est ce qui adapte le nombre de jours visibles (1, 2 ou plus). Duplique la carte en changeant l'index `0` en `1`, `2`, `3`.
+## Utilisation
+
+Dans le dashboard de la tablette : ajouter une carte → carte personnalisée, ou en YAML :
 
 ```yaml
-type: markdown
-card_mod:
-  style: |
-    ha-card { background: #ffffff; }
-    ha-markdown { font-size: 30px; }
-content: >
-  {% set days = state_attr('sensor.taskmanager_fil_du_jour', 'days') %}
-  {% set day = days[0] if days and days | length > 0 else none %}
-  {% if day %}
-  # {{ day['label'] | capitalize }}
-  {% for item in day['items'] %}
-  **{{ item['time'] }}** — {{ item['title'] }}
-
-  {% else %}
-  Rien de prévu.
-  {% endfor %}
-  {% endif %}
+type: custom:taskmanager-card
+entity: sensor.taskmanager_fil_du_jour   # facultatif
+show_header: true                        # bandeau vert « Aujourd'hui : … »
+min_day_width: 360                       # largeur minimale d'un jour (px)
+font_scale: 1                            # 1 = 30–35 px ; 0.8 pour réduire
 ```
 
-## Remarques
+**Nombre de jours adapté à la place** : la carte affiche autant de jours que la largeur le permet (largeur ÷ `min_day_width`), dans la limite des jours publiés (réglage « Nombre de jours publiés »).
 
-- La carte `custom:calendar-card-pro` actuelle n'est plus nécessaire : les événements du calendrier Google choisis dans le créateur apparaissent dans ce fil.
-- Après un redémarrage de HA, l'entité réapparaît dès que l'add-on se reconnecte (en moins d'une minute).
+Pour l'afficher en plein écran, utiliser une vue de type **Panneau** (une seule carte). L'image de fond et le mode kiosque restent réglés dans le dashboard, comme avant (le fond se règle sur la vue).

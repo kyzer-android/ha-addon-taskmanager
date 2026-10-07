@@ -3,15 +3,32 @@ import { h, clear, field, toast } from './dom.js';
 import { entityChecklist, loadEntities } from './picker.js';
 import { openForm } from './modal.js';
 
-const NUMBER_SETTINGS = [
-  ['question_seconds', 'Durée d\'affichage d\'une question (secondes)'],
-  ['screen_wait_seconds', 'Attente après allumage de l\'écran (secondes)'],
-  ['start_timeout_seconds', 'Délai avant de juger qu\'une lecture n\'a pas démarré (secondes)'],
-  ['call_unanswered_seconds', 'Un appel plus court que ceci est considéré sans réponse (secondes)'],
-  ['call_max_seconds', 'Durée maximale attendue pour un appel (secondes)'],
-  ['sensor_loop_max_runs', 'Nombre maximal de répétitions d\'une sous-tâche liée à un capteur'],
-  ['days_published', 'Nombre de jours publiés pour la tablette'],
-  ['grace_minutes', 'Retard toléré au lancement d\'une tâche (minutes)'],
+// Paramètres généraux regroupés par thème : chaque champ a une unité et une aide.
+const SETTING_GROUPS = [
+  { title: 'Questions et lecture', hint: 'Déroulement d\'un rappel sur la tablette.', fields: [
+    { key: 'question_seconds', label: 'Durée d\'affichage d\'une question', unit: 'secondes',
+      help: 'Temps pendant lequel les boutons OUI / NON restent affichés (60 s par défaut).' },
+    { key: 'screen_wait_seconds', label: 'Attente après allumage de l\'écran', unit: 'secondes',
+      help: 'Pause avant d\'ouvrir la vidéo, le temps que la tablette se réveille.' },
+    { key: 'start_timeout_seconds', label: 'Délai de démarrage d\'une lecture', unit: 'secondes',
+      help: 'Si la lecture n\'a pas démarré après ce délai, la fenêtre est fermée et noté au journal.' },
+    { key: 'grace_minutes', label: 'Retard toléré au lancement', unit: 'minutes',
+      help: 'Une tâche manquée de moins que ce délai est quand même lancée (par exemple après un redémarrage).' },
+  ] },
+  { title: 'Appels d\'escalade', hint: 'Appel vidéo vers un aidant quand une question reste sans réponse.', fields: [
+    { key: 'call_unanswered_seconds', label: 'Appel considéré sans réponse', unit: 'secondes',
+      help: 'Un appel plus court que ce délai passe à l\'aidant suivant.' },
+    { key: 'call_max_seconds', label: 'Durée maximale attendue d\'un appel', unit: 'secondes',
+      help: 'Au-delà, l\'add-on arrête de surveiller l\'appel.' },
+    { key: 'call_url_template', label: 'Adresse qui lance l\'appel', kind: 'text',
+      help: '{extension} est remplacé par l\'extension appelée. Par défaut : /lovelace/0?call={extension}' },
+    { key: 'tablet_home_path', label: 'Page à retrouver après un appel', kind: 'text',
+      help: 'Chemin du dashboard de la tablette (facultatif), par exemple /lovelace/0.' },
+  ] },
+  { title: 'Sous-tâches liées à un capteur', hint: 'Rejeu tant qu\'une condition reste vraie (par exemple : toujours au lit).', fields: [
+    { key: 'sensor_loop_max_runs', label: 'Nombre maximal de répétitions', unit: 'fois',
+      help: 'Garde-fou : arrête le rejeu après ce nombre de passages.' },
+  ] },
 ];
 
 const makeId = (prefix) => prefix + Math.random().toString(16).slice(2, 10);
@@ -24,11 +41,6 @@ const DOMAINS = {
   other: ['sensor', 'binary_sensor', 'input_boolean', 'input_select', 'person', 'switch', 'light'],
   calendar: ['calendar'],
 };
-
-const textInput = (object, key, listId) => h('input', {
-  type: 'text', value: object[key] || '', list: listId,
-  oninput: (event) => { object[key] = event.target.value; },
-});
 
 export const renderSettings = async (root) => {
   const config = await api.config();
@@ -167,23 +179,57 @@ export const renderSettings = async (root) => {
       draw();
     })), 'Catalogue vide : ajoutes-y des capteurs.');
 
-  const settingsForm = () => {
+  const settingField = (spec) => {
     const settings = config.settings;
-    return h('div', {},
-      h('div', { class: 'row' }, NUMBER_SETTINGS.map(([key, label]) => field(label,
-        h('input', { type: 'number', min: 0, step: 'any', value: settings[key],
-          oninput: (event) => { settings[key] = Number(event.target.value); } })))),
-      h('div', { class: 'row' },
-        field('Page du dashboard à retrouver après un appel d\'escalade (chemin, facultatif)', textInput(settings, 'tablet_home_path')),
-        field('Modèle d\'URL pour lancer un appel ({extension} est remplacé)', textInput(settings, 'call_url_template'))),
-      h('div', { class: 'field' },
-        h('span', { class: 'field-label' }, 'Calendriers à proposer dans le créateur de tâches'),
-        entityChecklist({ entities, domains: DOMAINS.calendar, values: settings.calendar_entities || [],
-          onChange: (values) => { settings.calendar_entities = values; } })),
-      h('label', { class: 'field' },
-        h('span', { class: 'field-label' }, 'Style du popup vidéo (CSS injecté par Browser Mod ; sert à masquer les contrôles du lecteur)'),
-        h('textarea', { rows: 10, oninput: (event) => { settings.video_style = event.target.value; } }, settings.video_style)));
+    const input = spec.kind === 'text'
+      ? h('input', { type: 'text', class: 'modal-input', value: settings[spec.key] || '',
+        oninput: (event) => { settings[spec.key] = event.target.value; } })
+      : h('div', { class: 'unit-input' },
+        h('input', { type: 'number', class: 'modal-input', min: 0, step: 'any', value: settings[spec.key],
+          oninput: (event) => { settings[spec.key] = Number(event.target.value); } }),
+        spec.unit ? h('span', { class: 'unit' }, spec.unit) : null);
+    return h('div', { class: 'modal-field' },
+      h('span', { class: 'modal-label' }, spec.label),
+      spec.help ? h('span', { class: 'modal-help' }, spec.help) : null,
+      input);
   };
+
+  const groupPanel = (group) => h('section', { class: 'panel' },
+    h('h2', { class: 'panel-title' }, group.title),
+    group.hint ? h('p', { class: 'hint' }, group.hint) : null,
+    h('div', { class: 'settings-grid' }, group.fields.map(settingField)));
+
+  const cardPanel = () => {
+    const status = h('p', { class: 'hint' }, 'Vérification…');
+    const yaml = h('pre', { class: 'code-box' });
+    const copy = h('button', { class: 'btn btn-secondary btn-small', onclick: async () => {
+      try { await navigator.clipboard.writeText(yaml.textContent); toast('Copié'); } catch (error) { toast('Copie impossible : sélectionne le texte'); }
+    } }, 'Copier');
+    api.card().then((info) => {
+      const icon = { ok: '✅', manual: '⚠️', error: '❌' }[info.resource] || '⏳';
+      status.textContent = `${icon} ${info.message || ''}`;
+      yaml.textContent = info.yaml || '';
+    }).catch(() => { status.textContent = '❌ État de la carte indisponible'; });
+    return h('section', { class: 'panel' },
+      h('h2', { class: 'panel-title' }, 'Vue tablette'),
+      h('p', { class: 'hint' }, 'L\'add-on installe la carte « Fil du jour » dans Home Assistant. Ajoute-la à un tableau de bord (carte personnalisée, ou vue de type « panneau » pour l\'afficher en plein écran).'),
+      h('div', { class: 'settings-grid' }, settingField({
+        key: 'days_published', label: 'Nombre de jours publiés', unit: 'jours',
+        help: 'Jours disponibles pour la carte. Elle en montre autant que la largeur de l\'écran le permet.' })),
+      status, yaml, copy);
+  };
+
+  const calendarPanel = () => h('section', { class: 'panel' },
+    h('h2', { class: 'panel-title' }, 'Calendriers'),
+    h('p', { class: 'hint' }, 'Calendriers proposés dans le créateur de tâches pour choisir les événements à afficher sur la tablette.'),
+    entityChecklist({ entities, domains: DOMAINS.calendar, values: config.settings.calendar_entities || [],
+      onChange: (values) => { config.settings.calendar_entities = values; } }));
+
+  const advancedPanel = () => h('details', { class: 'panel' },
+    h('summary', { class: 'panel-title' }, 'Avancé : style de la vidéo'),
+    h('p', { class: 'hint' }, 'CSS injecté par Browser Mod dans la fenêtre vidéo. Il masque les contrôles du lecteur (pause, barre de progression). À modifier seulement si les contrôles réapparaissent.'),
+    h('textarea', { class: 'modal-input', rows: 10, oninput: (event) => { config.settings.video_style = event.target.value; } },
+      config.settings.video_style));
 
   const save = async () => {
     config.catalog.forEach((item) => { item.id = item.id || makeId('e'); });
@@ -209,9 +255,10 @@ export const renderSettings = async (root) => {
         h('p', { class: 'hint' }, 'Donne un nom parlant aux capteurs : présence (radar, onMotion Fully…) ou autres capteurs pour les sous-tâches.'),
         catalogList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editCatalogItem(null) }, '＋ Ajouter une entité')),
-      h('section', { class: 'panel' },
-        h('h2', { class: 'panel-title' }, 'Paramètres généraux'),
-        settingsForm()),
+      ...SETTING_GROUPS.map(groupPanel),
+      cardPanel(),
+      calendarPanel(),
+      advancedPanel(),
       h('div', { class: 'canvas-actions' }, h('span'), h('button', { class: 'btn', onclick: save }, 'Enregistrer la configuration')));
   };
 

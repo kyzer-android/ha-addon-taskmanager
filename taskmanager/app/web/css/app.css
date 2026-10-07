@@ -289,3 +289,16 @@ input[type="checkbox"] { width: 22px; height: 22px; }
 .config-card-line { font-size: 14px; color: var(--color-muted); overflow-wrap: anywhere; }
 .config-card-actions { display: flex; gap: var(--spacing-sm); }
 .config-empty { color: var(--color-muted); font-style: italic; margin-bottom: var(--spacing-md); }
+
+/* ===== Paramètres généraux ===== */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-lg); }
+.unit-input { display: flex; align-items: center; gap: var(--spacing-sm); }
+.unit-input .modal-input { max-width: 160px; }
+.unit { color: var(--color-muted); }
+.code-box {
+  margin: var(--spacing-md) 0; padding: var(--spacing-md); overflow-x: auto;
+  background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 14px;
+}
+details.panel > summary { cursor: pointer; margin: 0; }
+details.panel[open] > summary { margin-bottom: var(--spacing-md); }
+.panel > .hint + .settings-grid { margin-top: var(--spacing-md); }

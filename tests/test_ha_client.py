@@ -106,3 +106,35 @@ def test_registry_gives_area_and_device():
                 assert await broken.registry() == {}
 
     asyncio.run(scenario())
+
+
+def test_ws_call_returns_result_or_raises():
+    async def websocket(request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.send_json({"type": "auth_required"})
+        await ws.receive_json()
+        await ws.send_json({"type": "auth_ok"})
+        message = await ws.receive_json()
+        if message["type"] == "ok/cmd":
+            await ws.send_json({"id": message["id"], "type": "result", "success": True, "result": {"echo": message["x"]}})
+        else:
+            await ws.send_json({"id": message["id"], "type": "result", "success": False, "error": {"message": "refusé"}})
+        await asyncio.sleep(0.1)
+        return ws
+
+    async def scenario():
+        app = web.Application()
+        app.router.add_get("/websocket", websocket)
+        async with TestServer(app) as server:
+            async with aiohttp.ClientSession() as session:
+                client = HaClient(session, "secret", str(server.make_url("")).rstrip("/"))
+                assert await client.ws_call("ok/cmd", x=3) == {"echo": 3}
+                try:
+                    await client.ws_call("bad/cmd")
+                except RuntimeError as err:
+                    assert "refusé" in str(err)
+                else:
+                    raise AssertionError("RuntimeError attendue")
+
+    asyncio.run(scenario())

@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { h, clear, field, toast, todayIso } from './dom.js';
+import { entityPicker, loadEntities } from './picker.js';
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const TRIGGER_LABELS = {
@@ -40,7 +41,7 @@ const newTask = () => ({
 });
 
 export const renderCreator = async (root, context, show) => {
-  const [config, media] = await Promise.all([api.config(), api.media()]);
+  const [config, media, entities] = await Promise.all([api.config(), api.media(), loadEntities()]);
   let draft = context.editTask ? structuredClone(context.editTask) : null;
   const isEdit = Boolean(context.editTask);
   context.editTask = null;
@@ -165,8 +166,10 @@ export const renderCreator = async (root, context, show) => {
         draw();
       } }, 'Supprimer la sous-tâche')),
     child.trigger === 'sensor' ? h('div', { class: 'row' },
-      field('Capteur', h('input', { type: 'text', list: 'entityList', value: child.sensor.entity_id,
-        oninput: bind(child.sensor, 'entity_id') })),
+      field('Capteur', entityPicker({
+        entities, value: child.sensor.entity_id, pinned: config.catalog.map((item) => item.entity_id),
+        domains: ['sensor', 'binary_sensor', 'input_boolean', 'input_select', 'person', 'switch', 'light'],
+        onChange: (entityId) => { child.sensor.entity_id = entityId; } })),
       field('État attendu', h('input', { type: 'text', value: child.sensor.state, oninput: bind(child.sensor, 'state') })),
       field('Rejouer toutes les (min)', h('input', { type: 'number', min: 0.1, step: 0.5, value: child.sensor.repeat_minutes,
         oninput: bind(child.sensor, 'repeat_minutes', Number) }))) : null,

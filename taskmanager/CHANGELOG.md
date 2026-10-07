@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+- Configuration : tous les champs d'entités (lecteur, écran, capteurs d'appel et de présence, catalogue, capteur de sous-tâche, calendriers) sont des listes de sélection avec recherche, filtrées par domaine. Une entité enregistrée mais disparue est signalée en rouge « introuvable ».
+- Le Browser ID reste en saisie libre (aucune API HA fiable pour le lister).
+
 ## 0.1.2
 - Correction de l'erreur 404 à l'ouverture du panneau : Ingress transmet un chemin du type `////`, les slashes répétés sont maintenant normalisés.
 

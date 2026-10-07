@@ -1,5 +1,5 @@
-import { api } from './api.js';
-import { h, clear, toast } from './dom.js';
+import { loadEntities } from './picker.js';
+import { h, clear } from './dom.js';
 import { renderTimeline } from './timeline.js';
 import { renderCreator } from './creator.js';
 import { renderArchive } from './archive.js';
@@ -31,17 +31,6 @@ const show = async (pageId) => {
   }
 };
 
-const fillEntityList = async () => {
-  try {
-    const list = document.getElementById('entityList');
-    (await api.entities()).forEach((entity) => {
-      list.append(h('option', { value: entity.entity_id }, entity.name));
-    });
-  } catch (error) {
-    toast('Entités Home Assistant indisponibles');
-  }
-};
-
 pages.forEach((page) => {
   nav.append(h('button', {
     class: 'app-nav-link',
@@ -50,5 +39,5 @@ pages.forEach((page) => {
   }, page.label));
 });
 
-fillEntityList();
+loadEntities();
 show('timeline');

@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { h, clear, field, toast } from './dom.js';
+import { entityPicker, entityChecklist, loadEntities } from './picker.js';
 
 const NUMBER_SETTINGS = [
   ['question_seconds', 'Durée d\'affichage d\'une question (secondes)'],
@@ -14,6 +15,15 @@ const NUMBER_SETTINGS = [
 
 const makeId = (prefix) => prefix + Math.random().toString(16).slice(2, 10);
 
+const DOMAINS = {
+  media: ['media_player'],
+  screen: ['light', 'switch'],
+  callSensor: ['sensor'],
+  presence: ['binary_sensor', 'sensor'],
+  other: ['sensor', 'binary_sensor', 'input_boolean', 'input_select', 'person', 'switch', 'light'],
+  calendar: ['calendar'],
+};
+
 const textInput = (object, key, listId) => h('input', {
   type: 'text', value: object[key] || '', list: listId,
   oninput: (event) => { object[key] = event.target.value; },
@@ -21,6 +31,11 @@ const textInput = (object, key, listId) => h('input', {
 
 export const renderSettings = async (root) => {
   const config = await api.config();
+  const entities = await loadEntities();
+  const picker = (object, key, domains, extra = {}) => entityPicker({
+    entities, domains, value: object[key], allowEmpty: Boolean(extra.allowEmpty),
+    onChange: (entityId) => { object[key] = entityId; },
+  });
   const page = h('div');
   root.append(page);
 
@@ -30,11 +45,11 @@ export const renderSettings = async (root) => {
     h('tbody', {}, config.rooms.map((room, index) => h('tr', {},
       h('td', {}, textInput(room, 'name')),
       h('td', {}, textInput(room, 'extension')),
-      h('td', {}, textInput(room, 'media_player', 'entityList')),
-      h('td', {}, textInput(room, 'screen', 'entityList')),
-      h('td', {}, textInput(room, 'call_sensor', 'entityList')),
+      h('td', {}, picker(room, 'media_player', DOMAINS.media)),
+      h('td', {}, picker(room, 'screen', DOMAINS.screen)),
+      h('td', {}, picker(room, 'call_sensor', DOMAINS.callSensor)),
       h('td', {}, textInput(room, 'browser_id')),
-      h('td', {}, textInput(room, 'presence_sensor', 'entityList')),
+      h('td', {}, picker(room, 'presence_sensor', DOMAINS.presence, { allowEmpty: true })),
       h('td', {}, h('input', { type: 'radio', name: 'defaultRoom', checked: config.default_room_id === room.id,
         onchange: () => { config.default_room_id = room.id; } })),
       h('td', {}, h('button', { class: 'btn btn-danger btn-small', onclick: () => {
@@ -55,9 +70,9 @@ export const renderSettings = async (root) => {
   const catalogTable = () => h('div', { class: 'table-wrap' }, h('table', { class: 'data-table' },
     h('thead', {}, h('tr', {}, ['Entité HA', 'Nom parlant', 'Type', ''].map((label) => h('th', {}, label)))),
     h('tbody', {}, config.catalog.map((item, index) => h('tr', {},
-      h('td', {}, textInput(item, 'entity_id', 'entityList')),
+      h('td', {}, picker(item, 'entity_id', item.type === 'presence' ? DOMAINS.presence : DOMAINS.other)),
       h('td', {}, textInput(item, 'name')),
-      h('td', {}, h('select', { onchange: (event) => { item.type = event.target.value; } },
+      h('td', {}, h('select', { onchange: (event) => { item.type = event.target.value; draw(); } },
         h('option', { value: 'presence', selected: item.type === 'presence' }, 'Capteur de présence'),
         h('option', { value: 'sensor', selected: item.type !== 'presence' }, 'Autre capteur'))),
       h('td', {}, h('button', { class: 'btn btn-danger btn-small', onclick: () => {
@@ -74,11 +89,10 @@ export const renderSettings = async (root) => {
       h('div', { class: 'row' },
         field('Page du dashboard à retrouver après un appel d\'escalade (chemin, facultatif)', textInput(settings, 'tablet_home_path')),
         field('Modèle d\'URL pour lancer un appel ({extension} est remplacé)', textInput(settings, 'call_url_template'))),
-      h('label', { class: 'field' },
-        h('span', { class: 'field-label' }, 'Calendriers à proposer (une entité calendar.* par ligne)'),
-        h('textarea', { rows: 3, oninput: (event) => {
-          settings.calendar_entities = event.target.value.split('\n').map((line) => line.trim()).filter(Boolean);
-        } }, (settings.calendar_entities || []).join('\n'))),
+      h('div', { class: 'field' },
+        h('span', { class: 'field-label' }, 'Calendriers à proposer dans le créateur de tâches'),
+        entityChecklist({ entities, domains: DOMAINS.calendar, values: settings.calendar_entities || [],
+          onChange: (values) => { settings.calendar_entities = values; } })),
       h('label', { class: 'field' },
         h('span', { class: 'field-label' }, 'Style du popup vidéo (CSS injecté par Browser Mod ; sert à masquer les contrôles du lecteur)'),
         h('textarea', { rows: 10, oninput: (event) => { settings.video_style = event.target.value; } }, settings.video_style)));

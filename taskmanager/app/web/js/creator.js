@@ -19,6 +19,16 @@ const TILES = [
   { id: 'subtask', label: 'Sous-tâche', icon: '☰', cls: 'tile-subtask' },
 ];
 
+const dayTitle = (iso, today) => {
+  const next = new Date(`${today}T12:00:00`);
+  next.setDate(next.getDate() + 1);
+  const tomorrow = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+  const label = new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const capital = label.charAt(0).toUpperCase() + label.slice(1);
+  if (iso === today) return `Aujourd'hui · ${capital}`;
+  return iso === tomorrow ? `Demain · ${capital}` : capital;
+};
+
 const makeId = (prefix) => prefix + Math.random().toString(16).slice(2, 10);
 
 const newNode = (title = '') => ({
@@ -335,15 +345,27 @@ export const renderCreator = async (root, context, show) => {
         box.append(h('p', { class: 'hint' }, 'Aucun calendrier coché : voir Configuration → Calendriers.'));
         return;
       }
-      if (!events.length) box.append(h('p', { class: 'hint' }, 'Aucun événement à venir.'));
-      events.forEach((event) => {
-        box.append(h('label', { class: 'row' },
-          h('input', { type: 'checkbox', checked: !event.hidden, onchange: async (change) => {
-            event.hidden = !change.target.checked;
-            await api.saveHiddenEvents(events.filter((item) => item.hidden).map((item) => item.key));
-            toast(event.hidden ? 'Événement masqué' : 'Événement affiché');
-          } }),
-          `${event.start.replace('T', ' ').slice(0, 16)} · ${event.summary}`));
+      const today = todayIso();
+      const byDay = new Map();
+      events.forEach((event) => (event.days || []).forEach((day) => {
+        if (day < today) return;
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day).push(event);
+      }));
+      if (!byDay.size) box.append(h('p', { class: 'hint' }, 'Aucun événement à venir.'));
+      [...byDay.keys()].sort().forEach((day) => {
+        const items = byDay.get(day).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+        box.append(h('div', { class: 'event-day' },
+          h('h3', { class: 'event-day-title' }, dayTitle(day, today)),
+          items.map((event) => h('label', { class: 'event-row' },
+            h('input', { type: 'checkbox', checked: !event.hidden, onchange: async (change) => {
+              event.hidden = !change.target.checked;
+              await api.saveHiddenEvents(events.filter((item) => item.hidden).map((item) => item.key));
+              toast(event.hidden ? 'Événement masqué' : 'Événement affiché');
+              drawEvents();
+            } }),
+            h('span', { class: 'event-time' }, event.time || ''),
+            h('span', { class: 'event-title' }, event.summary)))));
       });
     };
     const load = async (refresh) => {
@@ -381,7 +403,7 @@ export const renderCreator = async (root, context, show) => {
           onclick: () => tapTile(tile.id),
         }, `${tile.icon} ${tile.label}`)),
         h('div', { class: 'tile tile-template', onclick: () => openTemplates(importTemplate) }, '📚 Modèles'))),
-      draft ? h('section', { class: 'panel' }, scheduleForm()) : null,
+      ...(draft ? [h('section', { class: 'panel' }, scheduleForm())] : []),
       canvas,
       h('div', { class: 'canvas-actions' },
         h('button', { class: 'btn btn-danger', onclick: () => { draft = null; selectedId = ''; draw(); } }, '🗑 Effacer'),

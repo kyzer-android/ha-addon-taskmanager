@@ -33,7 +33,8 @@ class IngressApplication(web.Application):
         if "//" in path:
             while "//" in path:
                 path = path.replace("//", "/")
-            request = request.clone(rel_url=request.rel_url.with_path(path))
+            # with_path() efface la query string : on la remet (sinon `?date=…` est perdu derrière Ingress).
+            request = request.clone(rel_url=request.rel_url.with_path(path).with_query(request.rel_url.query_string))
         return await super()._handle(request)
 
 
@@ -406,7 +407,13 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     async def calendar(_: web.Request) -> web.Response:
         """Événements importés automatiquement des calendriers cochés, avec leur état (masqué ou non)."""
         hidden = set(storage.config["hidden_events"])
-        return web.json_response([{**event, "hidden": event["key"] in hidden} for event in engine.calendar_events])
+        from . import schedule
+        out = []
+        for event in engine.calendar_events:
+            days = schedule.event_days(event)
+            out.append({**event, "hidden": event["key"] in hidden,
+                        "days": [day.isoformat() for day in days], "time": schedule.event_day_and_time(event)[1]})
+        return web.json_response(out)
 
     @routes.post("/api/calendar/refresh")
     async def calendar_refresh(_: web.Request) -> web.Response:

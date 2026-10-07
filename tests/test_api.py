@@ -165,3 +165,24 @@ def test_ingress_repeated_slashes(engine):
             assert (await client.get(path)).status == 200, path
     with_client(engine, scenario)
 
+
+
+def test_ingress_keeps_query_string(engine):
+    """Régression : derrière Ingress (`////api/day?date=…`) la date demandée ne doit pas être perdue."""
+    async def scenario(client):
+        data = await (await client.get("////api//day?date=2026-10-11")).json()
+        assert data["date"] == "2026-10-11" and data["label"] == "dimanche 11 octobre"
+    with_client(engine, scenario)
+
+
+def test_calendar_lists_days_and_time(engine):
+    engine.calendar_events = [
+        {"key": "a", "summary": "Médecin", "start": "2026-10-08T10:30:00+02:00", "end": "2026-10-08T11:00:00+02:00"},
+        {"key": "b", "summary": "Vacances", "start": "2026-10-09", "end": "2026-10-12"},
+    ]
+
+    async def scenario(client):
+        events = {e["key"]: e for e in await (await client.get("/api/calendar")).json()}
+        assert events["a"]["days"] == ["2026-10-08"] and events["a"]["time"] == "10:30"
+        assert events["b"]["days"] == ["2026-10-09", "2026-10-10", "2026-10-11"]
+    with_client(engine, scenario)

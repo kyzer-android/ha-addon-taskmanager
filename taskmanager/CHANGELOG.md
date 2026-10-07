@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+- **Correction importante** : derrière Ingress, les paramètres d'adresse étaient perdus (changer la date du Fil de la journée n'avait aucun effet). Corrigé, avec un test de non-régression.
+- **Créateur** : le mot « null » n'apparaît plus au-dessus du canvas vide.
+- **Agenda** : les événements du calendrier sont groupés par jour (« Aujourd'hui », « Demain », puis la date), avec l'heure en gras ou « Journée ». Un événement de plusieurs jours apparaît chaque jour.
+
 ## 0.6.0
 - **Modèles** : l'onglet Archive disparaît. Sur chaque ligne du Fil de la journée, « 📚 Modèle » enregistre la tâche complète (actions, médias, questions, sous-tâches) **sans date ni heure**. Dans le Créateur, la tuile « 📚 Modèles » liste les modèles (importer, renommer, supprimer) : sur un canvas vide le modèle devient la tâche, avec une carte sélectionnée il s'ajoute comme sous-tâche.
 - Le bouton « Archiver » est supprimé ; les anciennes tâches archivées sont abandonnées. Une tâche unique terminée ou passée est supprimée.

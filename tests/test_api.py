@@ -82,3 +82,10 @@ def test_answer_endpoint_for_future_ai(engine):
         reply = await (await client.post("/api/answer", json={"request_id": "x", "value": "oui", "source": "IA"})).json()
         assert reply == {"accepted": False}
     with_client(engine, scenario)
+
+
+def test_ingress_repeated_slashes(engine):
+    async def scenario(client):
+        for path in ("////", "////css//app.css", "////api//status"):
+            assert (await client.get(path)).status == 200, path
+    with_client(engine, scenario)

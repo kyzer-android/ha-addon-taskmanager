@@ -20,6 +20,21 @@ VIDEO_EXT = {"mp4", "webm", "mkv", "mov"}
 AUDIO_EXT = {"mp3", "wav", "m4a", "aac", "ogg", "flac"}
 
 
+class IngressApplication(web.Application):
+    """Application qui réduit les slashes répétés AVANT le routage.
+
+    Ingress peut transmettre un chemin du type « //// » (ingress_entry « / » + base).
+    """
+
+    async def _handle(self, request: web.Request):
+        path = request.rel_url.path
+        if "//" in path:
+            while "//" in path:
+                path = path.replace("//", "/")
+            request = request.clone(rel_url=request.rel_url.with_path(path))
+        return await super()._handle(request)
+
+
 @web.middleware
 async def ingress_only(request: web.Request, handler):
     """N'accepte que le Supervisor (Ingress), sauf mode développement."""
@@ -59,7 +74,7 @@ def event_key(entity_id: str, start: str, summary: str) -> str:
 
 
 def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
-    app = web.Application(middlewares=[ingress_only])
+    app = IngressApplication(middlewares=[ingress_only])
     storage = engine.storage
     routes = web.RouteTableDef()
 

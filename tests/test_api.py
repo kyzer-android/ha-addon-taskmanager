@@ -20,7 +20,7 @@ def with_client(engine, scenario):
 def test_task_lifecycle(engine):
     async def scenario(client):
         task = {"title": "Lever", "schedule": {"type": "daily", "days": [0, 1, 2, 3, 4, 5, 6], "time": "08:00"},
-                "root": {"media": {"kind": "video", "content_id": "media-source://media/a.mp4"}}}
+                "root": {"media": {"kind": "video", "content_id": "media-source://media_source/local/a.mp4"}}}
         created = await (await client.post("/api/tasks", json=task)).json()
         assert created["id"] and created["root"]["media"]["kind"] == "video"
         flagged = await (await client.post(f"/api/tasks/{created['id']}/flag",
@@ -101,7 +101,7 @@ def test_media_listing_and_calendar(engine, tmp_path):
     (tmp_path / "video_papa" / "note.txt").write_bytes(b"")
     found = list_media(str(tmp_path))
     assert found == [{"name": "lever.mp4", "path": "video_papa/lever.mp4",
-                      "content_id": "media-source://media/video_papa/lever.mp4", "kind": "video", "deletable": False}]
+                      "content_id": "media-source://media_source/local/video_papa/lever.mp4", "kind": "video", "deletable": False}]
     engine.storage.config["settings"]["calendar_entities"] = ["calendar.papa"]
 
     async def scenario(client):

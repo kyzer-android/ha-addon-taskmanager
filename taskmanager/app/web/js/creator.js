@@ -174,7 +174,7 @@ export const renderCreator = async (root, context, show) => {
       } }, files.map((file) => h('option', {
         value: file.content_id, selected: file.content_id === node.media.content_id,
       }, friendly(file))))
-      : h('input', { type: 'text', value: node.media.content_id, placeholder: 'media-source://media/…',
+      : h('input', { type: 'text', value: node.media.content_id, placeholder: 'media-source://media_source/local/…',
         oninput: bind(node.media, 'content_id') });
     if (files.length && !node.media.content_id) {
       node.media.content_id = files[0].content_id;

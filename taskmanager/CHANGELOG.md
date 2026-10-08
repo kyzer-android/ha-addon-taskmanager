@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+- **Correction lecture vidéo/audio** : l'adresse envoyée à Home Assistant était invalide (`media-source://media/…`, erreur 500 « unknown_media_source »). Elle devient `media-source://media_source/local/…`. Les tâches et modèles existants sont convertis automatiquement.
+- Le type de contenu d'une vidéo suit son extension (mp4, webm, mov, mkv…).
+
 ## 0.6.1
 - **Correction importante** : derrière Ingress, les paramètres d'adresse étaient perdus (changer la date du Fil de la journée n'avait aucun effet). Corrigé, avec un test de non-régression.
 - **Créateur** : le mot « null » n'apparaît plus au-dessus du canvas vide.

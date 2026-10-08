@@ -26,6 +26,10 @@ AUDIO_TYPES = {
     "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4",
     "aac": "audio/aac", "ogg": "audio/ogg", "flac": "audio/flac",
 }
+VIDEO_TYPES = {
+    "mp4": "video/mp4", "m4v": "video/mp4", "webm": "video/webm", "mkv": "video/x-matroska",
+    "mov": "video/quicktime", "3gp": "video/3gpp",
+}
 CALL_STYLES = """ha-dialog {
   --dialog-content-padding: 0;
   --padding-x: 0px;
@@ -309,7 +313,8 @@ class Engine:
                         "dismissable": False,
                         "popup_styles": [{"style": "all", "styles": self.settings.get("video_style", "")}],
                     }},
-                    "media": {"media_content_id": content_id, "media_content_type": "video/mp4"},
+                    "media": {"media_content_id": content_id,
+                              "media_content_type": VIDEO_TYPES.get(content_id.rsplit(".", 1)[-1].lower(), "video/mp4")},
                 }
             else:
                 extension = content_id.rsplit(".", 1)[-1].lower()

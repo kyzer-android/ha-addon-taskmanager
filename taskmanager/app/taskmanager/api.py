@@ -137,7 +137,7 @@ async def save_upload(request: web.Request, root: Path, allowed: set[str], max_b
 def media_entry(media_dir: str, path: Path) -> dict[str, Any]:
     rel = path.relative_to(Path(media_dir)).as_posix()
     ext = path.suffix.lower().lstrip(".")
-    return {"name": path.name, "path": rel, "content_id": f"media-source://media/{rel}",
+    return {"name": path.name, "path": rel, "content_id": f"{models.MEDIA_SOURCE_PREFIX}{rel}",
             "kind": "video" if ext in VIDEO_EXT else "audio", "deletable": rel.startswith(f"{MEDIA_UPLOAD_DIR}/")}
 
 
@@ -154,7 +154,7 @@ def list_media(media_dir: str) -> list[dict[str, str]]:
         files.append({
             "name": path.name,
             "path": rel,
-            "content_id": f"media-source://media/{rel}",
+            "content_id": f"{models.MEDIA_SOURCE_PREFIX}{rel}",
             "kind": "video" if ext in VIDEO_EXT else "audio",
             "deletable": rel.startswith(f"{MEDIA_UPLOAD_DIR}/"),
         })

@@ -94,3 +94,12 @@ def test_all_day_event_spans_every_day_and_is_listed_first():
     titles = [[item["title"] for item in day["items"]] for day in board]
     assert titles == [["Vacances"], ["Vacances", "Médecin"], ["Vacances"], []]
     assert board[1]["items"][0]["time"] == schedule.ALL_DAY_LABEL
+
+
+def test_old_media_source_ids_are_migrated():
+    """Régression : `media-source://media/…` n'est pas résolu par HA (500). Il faut `media_source/local`."""
+    from taskmanager import models
+    node = models.clean_node({"media": {"kind": "video", "content_id": "media-source://media/taskmanager/a b.mp4"}})
+    assert node["media"]["content_id"] == "media-source://media_source/local/taskmanager/a b.mp4"
+    again = models.clean_node(node)
+    assert again["media"]["content_id"] == node["media"]["content_id"]

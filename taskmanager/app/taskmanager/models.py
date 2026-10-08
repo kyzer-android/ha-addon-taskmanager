@@ -87,6 +87,18 @@ def new_task(title: str = "Nouvelle tâche") -> dict[str, Any]:
     }
 
 
+# Source locale de HA pour le dossier /media : media-source://media_source/local/<chemin>
+MEDIA_SOURCE_PREFIX = "media-source://media_source/local/"
+_OLD_MEDIA_PREFIX = "media-source://media/"
+
+
+def fix_content_id(content_id: str) -> str:
+    """Convertit l'ancien format (invalide, `media-source://media/…`) vers celui que Home Assistant résout."""
+    if content_id.startswith(_OLD_MEDIA_PREFIX):
+        return MEDIA_SOURCE_PREFIX + content_id[len(_OLD_MEDIA_PREFIX):]
+    return content_id
+
+
 def clean_node(node: dict[str, Any]) -> dict[str, Any]:
     """Normalise un nœud (et ses sous-tâches) reçu de l'interface."""
     base = new_node()
@@ -98,7 +110,7 @@ def clean_node(node: dict[str, Any]) -> dict[str, Any]:
     kind = media.get("kind") if media.get("kind") in MEDIA_KINDS else "none"
     out["media"] = {
         "kind": kind,
-        "content_id": str(media.get("content_id") or "") if kind != "none" else "",
+        "content_id": fix_content_id(str(media.get("content_id") or "")) if kind != "none" else "",
         "label": str(media.get("label") or ""),
     }
     question = node.get("question")

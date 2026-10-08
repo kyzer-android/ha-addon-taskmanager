@@ -9,8 +9,8 @@ def node(**kw):
     return models.clean_node(base)
 
 
-VIDEO = {"kind": "video", "content_id": "media-source://media/video_papa/lever.mp4", "label": "lever"}
-AUDIO = {"kind": "audio", "content_id": "media-source://media/video_papa/musique.mp3", "label": "m"}
+VIDEO = {"kind": "video", "content_id": "media-source://media_source/local/video_papa/lever.mp4", "label": "lever"}
+AUDIO = {"kind": "audio", "content_id": "media-source://media_source/local/video_papa/musique.mp3", "label": "m"}
 
 
 def run(coro):
@@ -77,7 +77,7 @@ def test_playback_that_never_starts_is_closed(engine, ha):
 def test_question_yes_runs_yes_branch_and_closes_other_tablet(engine, ha):
     ha.play_seconds = 0.6
     yes_child = {"trigger": "yes", "node": node(media=AUDIO)}
-    no_child = {"trigger": "no", "node": node(media={"kind": "video", "content_id": "media-source://media/x.mp4"})}
+    no_child = {"trigger": "no", "node": node(media={"kind": "video", "content_id": "media-source://media_source/local/x.mp4"})}
     task_node = node(media=VIDEO, question={"text": "Ça va ?", "repeats": 0, "delay_minutes": 0},
                      children=[yes_child, no_child])
 

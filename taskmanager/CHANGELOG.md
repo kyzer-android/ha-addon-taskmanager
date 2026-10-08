@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- Le titre « Gestionnaire de tâches » de la page est retiré (HA affiche déjà le sien) : les onglets passent en haut.
+
 ## 0.7.0
 - **Vidéo + question** : la vidéo prend le haut de l'écran (80 % par défaut) et seuls les boutons OUI / NON, de taille moyenne, sont dessous. À la fin de la vidéo, la question entière (texte et gros boutons) apparaît. Répondre pendant la vidéo l'arrête partout.
 - **Question seule** : affichage centré. Vidéo seule : plein écran, inchangé.

@@ -51,7 +51,6 @@ button, input, select, textarea { font: inherit; }
   top: 0;
   z-index: 10;
 }
-.app-title { margin: 0 0 var(--spacing-sm); font-size: var(--font-size-title); }
 .app-nav { display: flex; gap: var(--spacing-xs); overflow-x: auto; }
 .app-nav-link {
   border: 0;

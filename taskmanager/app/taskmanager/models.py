@@ -38,6 +38,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "tablet_font_scale": 1.0,
     "tablet_min_day_width": 360,
     "video_style": DEFAULT_VIDEO_STYLE,
+    "video_height_percent": 80,
+    "question_button_height": 90,
     "calendar_entities": [],
     "calendar_refresh_minutes": 10,
     "media_max_mb": 500,

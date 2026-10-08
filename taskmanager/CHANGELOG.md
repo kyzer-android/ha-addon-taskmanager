@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+- **Vidéo + question** : la vidéo prend le haut de l'écran (80 % par défaut) et seuls les boutons OUI / NON, de taille moyenne, sont dessous. À la fin de la vidéo, la question entière (texte et gros boutons) apparaît. Répondre pendant la vidéo l'arrête partout.
+- **Question seule** : affichage centré. Vidéo seule : plein écran, inchangé.
+- Deux réglages dans Configuration : hauteur de la vidéo et hauteur des boutons sous la vidéo.
+
 ## 0.6.2
 - **Correction lecture vidéo/audio** : l'adresse envoyée à Home Assistant était invalide (`media-source://media/…`, erreur 500 « unknown_media_source »). Elle devient `media-source://media_source/local/…`. Les tâches et modèles existants sont convertis automatiquement.
 - Le type de contenu d'une vidéo suit son extension (mp4, webm, mov, mkv…).

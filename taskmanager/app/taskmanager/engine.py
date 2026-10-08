@@ -30,6 +30,52 @@ VIDEO_TYPES = {
     "mp4": "video/mp4", "m4v": "video/mp4", "webm": "video/webm", "mkv": "video/x-matroska",
     "mov": "video/quicktime", "3gp": "video/3gpp",
 }
+# Question seule : tout est centré (horizontalement et verticalement).
+QUESTION_CENTER_STYLE = """ha-dialog {
+  --vertical-align-dialog: center;
+  --justify-action-buttons: center;
+  text-align: center;
+}
+.content, .container .content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}"""
+
+
+def video_top_style(base: str, percent: float) -> str:
+    """Vidéo + question : la vidéo occupe le haut de l'écran (percent % de la hauteur)."""
+    return base + (
+        "ha-dialog {\n"
+        "  --vertical-align-dialog: flex-start;\n"
+        "  --dialog-surface-margin-top: 0px;\n"
+        "  --mdc-dialog-min-width: 100vw;\n"
+        "  --mdc-dialog-max-width: 100vw;\n"
+        f"  --mdc-dialog-max-height: {percent:g}vh;\n"
+        "}\n"
+        "ha-dialog .container, .content {\n"
+        f"  height: {percent:g}vh !important;\n"
+        "}\n"
+        "video { width: 100%; height: 100%; object-fit: contain; }\n"
+    )
+
+
+def question_bottom_style(percent: float) -> str:
+    """Boutons seuls, sous la vidéo : ils occupent le reste de l'écran."""
+    rest = max(5.0, 100.0 - percent)
+    return (
+        "ha-dialog {\n"
+        "  --vertical-align-dialog: flex-end;\n"
+        "  --dialog-surface-margin-bottom: 0px;\n"
+        "  --mdc-dialog-min-width: 100vw;\n"
+        "  --mdc-dialog-max-width: 100vw;\n"
+        f"  --mdc-dialog-max-height: {rest:g}vh;\n"
+        "}\n"
+        f".content, .container .content {{ height: {rest:g}vh; padding: 0 !important; }}\n"
+    )
+
+
 CALL_STYLES = """ha-dialog {
   --dialog-content-padding: 0;
   --padding-x: 0px;
@@ -299,7 +345,13 @@ class Engine:
     def _is_playing(self, room: dict[str, Any]) -> bool:
         return self.ha.state(room["media_player"]) == "playing"
 
-    async def _play_on_room(self, room: dict[str, Any], media: dict[str, Any]) -> bool:
+    def _video_style(self, compact: bool) -> str:
+        base = self.settings.get("video_style", "")
+        if not compact:
+            return base
+        return video_top_style(base, float(self.settings.get("video_height_percent", 80)))
+
+    async def _play_on_room(self, room: dict[str, Any], media: dict[str, Any], compact: bool = False) -> bool:
         kind = media["kind"]
         content_id = media["content_id"]
         try:
@@ -311,7 +363,7 @@ class Engine:
                         "initial_style": "fullscreen",
                         "tag": "video",
                         "dismissable": False,
-                        "popup_styles": [{"style": "all", "styles": self.settings.get("video_style", "")}],
+                        "popup_styles": [{"style": "all", "styles": self._video_style(compact)}],
                     }},
                     "media": {"media_content_id": content_id,
                               "media_content_type": VIDEO_TYPES.get(content_id.rsplit(".", 1)[-1].lower(), "video/mp4")},
@@ -336,8 +388,9 @@ class Engine:
                 await self._close_popup(room, "video")
         return started
 
-    async def _start_playback(self, rooms: list[dict[str, Any]], media: dict[str, Any]) -> list[dict[str, Any]]:
-        results = await asyncio.gather(*(self._play_on_room(r, media) for r in rooms))
+    async def _start_playback(self, rooms: list[dict[str, Any]], media: dict[str, Any],
+                              compact: bool = False) -> list[dict[str, Any]]:
+        results = await asyncio.gather(*(self._play_on_room(r, media, compact) for r in rooms))
         return [room for room, ok in zip(rooms, results) if ok]
 
     async def _finish_playback(self, rooms: list[dict[str, Any]], media: dict[str, Any]) -> None:
@@ -352,7 +405,11 @@ class Engine:
         await asyncio.gather(*(one(r) for r in rooms))
 
     # ---- questions ------------------------------------------------------------------
-    def _question_card(self, text: str, rid: str, room_id: str) -> dict[str, Any]:
+    def _question_card(self, text: str, rid: str, room_id: str, compact: bool = False) -> dict[str, Any]:
+        """compact : boutons moyens seuls (sous la vidéo) ; sinon texte + énormes boutons, centrés."""
+        height = int(float(self.settings.get("question_button_height", 90))) if compact else 160
+        font = max(16, int(height * 0.3)) if compact else 44
+
         def button(label: str, value: str, color: str, icon: str) -> dict[str, Any]:
             return {
                 "type": "button", "name": label, "icon": icon,
@@ -363,36 +420,45 @@ class Engine:
                              "message": ANSWER_SEPARATOR.join(["answer", rid, room_id, value])},
                 },
                 "card_mod": {"style": (
-                    f"ha-card {{ height: 160px; font-size: 44px; font-weight: bold; "
+                    f"ha-card {{ height: {height}px; font-size: {font}px; font-weight: bold; "
                     f"background: {color}; color: white; }}"
                 )},
             }
 
+        buttons = {"type": "horizontal-stack", "cards": [
+            button("OUI", "oui", "#2e7d32", "mdi:check-bold"),
+            button("NON", "non", "#c62828", "mdi:close-thick"),
+        ]}
+        if compact:
+            return buttons
         return {"type": "vertical-stack", "cards": [
             {"type": "markdown", "content": f"# {text}",
              "card_mod": {"style": "ha-card { text-align: center; font-size: 36px; }"}},
-            {"type": "horizontal-stack", "cards": [
-                button("OUI", "oui", "#2e7d32", "mdi:check-bold"),
-                button("NON", "non", "#c62828", "mdi:close-thick"),
-            ]},
+            buttons,
         ]}
 
-    async def _open_question(self, pq: PendingQuestion, text: str, rooms: list[dict[str, Any]]) -> None:
+    async def _open_question(self, pq: PendingQuestion, text: str, rooms: list[dict[str, Any]],
+                             compact: bool = False) -> None:
         seconds = float(self.settings.get("question_seconds", 60))
+        percent = float(self.settings.get("video_height_percent", 80))
         for room in rooms:
             browser_id = self._browser_id(room)
             if not browser_id:
                 continue
             try:
                 await self._ensure_screen(room)
-                await self.ha.call_service("browser_mod", "popup", {
+                data: dict[str, Any] = {
                     "browser_id": [browser_id],
                     "tag": "question",
                     "initial_style": "wide",
                     "dismissable": False,
-                    "timeout": int(seconds * 1000),
-                    "content": self._question_card(text, pq.rid, room.get("id", "")),
-                })
+                    "content": self._question_card(text, pq.rid, room.get("id", ""), compact),
+                    "popup_styles": [{"style": "all", "styles":
+                                      question_bottom_style(percent) if compact else QUESTION_CENTER_STYLE}],
+                }
+                if not compact:  # sous la vidéo, pas de délai : il démarre à la fin de la vidéo
+                    data["timeout"] = int(seconds * 1000)
+                await self.ha.call_service("browser_mod", "popup", data)
             except Exception as err:  # noqa: BLE001
                 self.log("warning", f"Question impossible sur « {room.get('name')} » : {err}")
 
@@ -414,17 +480,26 @@ class Engine:
                     self.questions[pq.rid] = pq
                     started = rooms
                     playback: asyncio.Task | None = None
+                    # Vidéo + question : vidéo en haut, boutons moyens dessous, question entière après la vidéo.
+                    compact = has_media and media.get("kind") == "video"
                     if has_media:
-                        started = await self._start_playback(rooms, media)
+                        started = await self._start_playback(rooms, media, compact)
                         playback = asyncio.create_task(self._finish_playback(started, media))
-                    await self._open_question(pq, question["text"], rooms)
+                        compact = compact and bool(started)
+                    await self._open_question(pq, question["text"], rooms, compact)
                     try:
+                        if compact and playback:
+                            await asyncio.wait({pq.future, playback}, return_when=asyncio.FIRST_COMPLETED)
+                            if not pq.future.done():
+                                for room in rooms:
+                                    await self._close_popup(room, "question")
+                                await self._open_question(pq, question["text"], rooms, False)
                         answered = await asyncio.wait_for(asyncio.shield(pq.future), seconds)
                     except asyncio.TimeoutError:
                         answered = None
                     finally:
                         self.questions.pop(pq.rid, None)
-                    await self._close_after_question(rooms, answered)
+                    await self._close_after_question(rooms, answered, stop_all=compact and not playback.done())
                     if playback:
                         # Les autres tablettes ont été arrêtées ; la vidéo de la tablette
                         # qui a répondu se termine normalement avant de libérer l'écran.
@@ -439,12 +514,13 @@ class Engine:
             await self._escalate(node["escalation"])
         return outcome
 
-    async def _close_after_question(self, rooms: list[dict[str, Any]], answered: tuple[str, str] | None) -> None:
+    async def _close_after_question(self, rooms: list[dict[str, Any]], answered: tuple[str, str] | None,
+                                    stop_all: bool = False) -> None:
         """Ferme la question partout ; ferme aussi la vidéo des autres tablettes si répondu."""
         answered_room = answered[1] if answered else None
         for room in rooms:
             await self._close_popup(room, "question")
-            if answered and room.get("id") != answered_room:
+            if answered and (stop_all or room.get("id") != answered_room):
                 await self._stop_media(room)
                 await self._close_popup(room, "video")
 

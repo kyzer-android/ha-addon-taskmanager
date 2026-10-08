@@ -95,11 +95,12 @@ def test_question_yes_runs_yes_branch_and_closes_other_tablet(engine, ha):
     assert outcome == "yes"
     popups = ha.services("browser_mod", "popup")
     assert {p["tag"] for p in popups} == {"question"}
-    card = popups[0]["content"]
-    assert card["cards"][1]["cards"][0]["tap_action"]["perform_action"] == "logbook.log"
-    # la tablette qui n'a pas répondu (chambre) est arrêtée et fermée
+    card = popups[0]["content"]  # vidéo + question : boutons moyens seuls, sous la vidéo
+    assert card["type"] == "horizontal-stack"
+    assert card["cards"][0]["tap_action"]["perform_action"] == "logbook.log"
+    # répondre pendant la vidéo l'arrête sur toutes les tablettes
     stopped = [c["entity_id"] for c in ha.services("media_player", "media_stop")]
-    assert "media_player.chambre" in stopped and "media_player.salon" not in stopped
+    assert "media_player.chambre" in stopped and "media_player.salon" in stopped
     # la branche OUI (audio) a bien été jouée, pas la branche NON (vidéo)
     types = [p["media"]["media_content_type"] for p in ha.services("media_player", "play_media")]
     assert "audio/mpeg" in types and types.count("video/mp4") == 2
@@ -131,7 +132,7 @@ def test_no_answer_repeats_then_escalates(engine, ha):
                      children=[{"trigger": "no_answer", "node": node(media=AUDIO)}])
     outcome = run(engine.run_node(task_node))
     assert outcome == "no_answer"
-    assert len(ha.services("browser_mod", "popup")) == 4  # 2 essais x 2 tablettes (aucune détection)
+    assert len(ha.services("browser_mod", "popup")) == 8  # 2 essais x 2 tablettes x (boutons sous la vidéo, puis question entière)
     calls = [c["path"] for c in ha.services("browser_mod", "navigate")]
     assert calls and "call=100" in calls[0]
     types = [p["media"]["media_content_type"] for p in ha.services("media_player", "play_media")]
@@ -206,3 +207,48 @@ def test_publish_board_sets_sensor(engine, ha):
     run(engine.publish_board())
     entity, state, attrs = ha.published[-1]
     assert entity == "sensor.taskmanager_fil_du_jour" and "days" in attrs
+
+
+def test_video_plus_question_layout_then_full_question(engine, ha):
+    """Vidéo 80 % en haut + boutons moyens seuls ; à la fin de la vidéo, question entière et centrée."""
+    ha.play_seconds = 0.3
+    engine.settings["question_seconds"] = 0.2
+    task_node = node(media=VIDEO, question={"text": "Ça va ?", "repeats": 0, "delay_minutes": 0})
+    run(engine.run_node(task_node))
+    video = ha.services("media_player", "play_media")[0]["extra"]["popup"]
+    assert "80vh" in video["popup_styles"][0]["styles"]
+    popups = [p for p in ha.services("browser_mod", "popup") if p["browser_id"] == ["tablette-salon"]]
+    compact, full = popups[0], popups[1]
+    assert compact["content"]["type"] == "horizontal-stack" and "timeout" not in compact
+    assert "height: 90px" in compact["content"]["cards"][0]["card_mod"]["style"]
+    assert "20vh" in compact["popup_styles"][0]["styles"]
+    assert full["content"]["type"] == "vertical-stack" and full["timeout"] == 200
+    assert "height: 160px" in full["content"]["cards"][1]["cards"][0]["card_mod"]["style"]
+    assert "center" in full["popup_styles"][0]["styles"]
+
+
+def test_question_alone_is_centered_and_huge(engine, ha):
+    engine.settings["question_seconds"] = 0.05
+    run(engine.run_node(node(question={"text": "Ça va ?", "repeats": 0, "delay_minutes": 0})))
+    popup = ha.services("browser_mod", "popup")[0]
+    assert popup["content"]["type"] == "vertical-stack"
+    assert "center" in popup["popup_styles"][0]["styles"]
+
+
+def test_answer_during_video_stops_video_everywhere(engine, ha):
+    ha.play_seconds = 5
+    task_node = node(media=VIDEO, question={"text": "Ça va ?", "repeats": 0, "delay_minutes": 0})
+
+    async def scenario():
+        job = asyncio.create_task(engine.run_node(task_node))
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            if engine.questions:
+                break
+        rid = next(iter(engine.questions))
+        engine.submit_answer(rid, "oui", room_id="salon")
+        return await asyncio.wait_for(job, 3)
+
+    assert run(scenario()) == "yes"
+    stopped = {c["entity_id"] for c in ha.services("media_player", "media_stop")}
+    assert "media_player.salon" in stopped

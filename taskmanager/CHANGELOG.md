@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+- **Rôles** : un aidant (non administrateur HA) ne voit plus que **Fil de la journée, Créateur et Vue tablette** — contrôlé aussi côté serveur (pas de configuration, utilisateurs, images, journal ni guides). Un administrateur HA voit tout, même s'il est listé comme aidant.
+- **Nouvel onglet Aide** (administrateurs) : guides « Serveur d'appel vidéo » et « Ajouter une tablette » affichés avec une vraie mise en page (sommaire, tableaux, blocs de code avec bouton Copier, encadrés).
+- Les guides fournis sont des **versions génériques** (sans données personnelles). Bouton « Remplacer par mon fichier (.md) » pour mettre le tien (stocké dans la config de l'add-on, jamais dans le dépôt) et « Revenir à la version générique ».
+
 ## 0.7.2
 - **Vidéo + question** : positionnement explicite des fenêtres (vidéo en haut sur 80 % de l'écran, boutons en bas sur le reste), pleine largeur, en cumulant plusieurs mécanismes CSS pour s'adapter à la version de HA / browser_mod.
 - **Question seule** : fenêtre centrée au milieu de l'écran.

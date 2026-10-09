@@ -110,3 +110,54 @@ def test_images_upload_select_and_serve(engine, tmp_path):
         assert tablet["settings"]["background_url"] == "api/image/upload/mon_fond.png"
         assert (await client.delete("/api/images/mon_fond.png")).status == 200
     run_with(engine, scenario)
+
+
+def test_caregiver_sees_only_daily_tools(engine):
+    setup_users(engine)
+
+    async def scenario(client):
+        aidant = {"X-Remote-User-Id": "u1"}
+        data = await (await client.get("/api/me", headers=aidant)).json()
+        assert data["full"] is True and data["admin"] is False
+        for path in ("/api/tasks", "/api/templates", "/api/config", "/api/entities"):
+            assert (await client.get(path, headers=aidant)).status == 200, path
+        for path in ("/api/journal", "/api/users", "/api/images", "/api/guides", "/api/guides/serveur"):
+            assert (await client.get(path, headers=aidant)).status == 403, path
+        assert (await client.put("/api/config", json={}, headers=aidant)).status == 403
+        assert (await client.put("/api/guides/serveur", data="# x", headers=aidant)).status == 403
+        assert (await client.delete("/api/guides/serveur", headers=aidant)).status == 403
+        admin = await (await client.get("/api/me", headers={"X-Remote-User-Id": "admin1"})).json()
+        assert admin["admin"] is True
+    run_with(engine, scenario)
+
+
+def test_ha_admin_listed_as_caregiver_stays_admin(engine):
+    engine.storage.set_config({**engine.config, "users": [
+        {"id": "c9", "name": "Admin", "role": "aidant", "ha_user_id": "admin1", "extension": "101"}]})
+
+    async def scenario(client):
+        data = await (await client.get("/api/me", headers={"X-Remote-User-Id": "admin1"})).json()
+        assert data["admin"] is True
+        assert (await client.get("/api/guides", headers={"X-Remote-User-Id": "admin1"})).status == 200
+    run_with(engine, scenario)
+
+
+def test_guides_default_replace_reset(engine):
+    async def scenario(client):
+        listing = await (await client.get("/api/guides")).json()
+        assert [g["id"] for g in listing] == ["serveur", "tablette"]
+        assert not any(g["custom"] for g in listing)
+        default = await (await client.get("/api/guides/serveur")).json()
+        assert default["custom"] is False and default["markdown"].startswith("#")
+        assert "maisondrusch" not in default["markdown"]
+        resp = await client.put("/api/guides/serveur", data="# Mon guide\n\n| a | b |\n|---|---|\n| 1 | 2 |".encode())
+        assert resp.status == 200
+        mine = await (await client.get("/api/guides/serveur")).json()
+        assert mine["custom"] is True and mine["markdown"].startswith("# Mon guide")
+        assert (await (await client.get("/api/guides/tablette")).json())["custom"] is False
+        assert (await client.put("/api/guides/serveur", data=b"  ")).status == 400
+        assert (await client.put("/api/guides/serveur", data=b"\xff\xfe\x00")).status == 400
+        assert (await client.put("/api/guides/inconnu", data=b"# x")).status == 404
+        assert (await client.delete("/api/guides/serveur")).status == 200
+        assert (await (await client.get("/api/guides/serveur")).json())["custom"] is False
+    run_with(engine, scenario)

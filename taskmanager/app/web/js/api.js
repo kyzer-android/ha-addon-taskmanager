@@ -33,6 +33,14 @@ export const api = {
   skipDay: (id, date, skipped) => request('POST', `api/tasks/${id}/skip`, { date, skipped }),
   flag: (id, name, value) => request('POST', `api/tasks/${id}/flag`, { name, value }),
   runTask: (id) => request('POST', `api/tasks/${id}/run`, {}),
+  guides: () => request('GET', 'api/guides'),
+  guide: (id) => request('GET', `api/guides/${id}`),
+  replaceGuide: async (id, text) => {
+    const response = await fetch(`api/guides/${id}`, { method: 'PUT', headers: { 'Content-Type': 'text/markdown' }, body: text });
+    if (!response.ok) throw new Error(await response.text() || response.status);
+    return response.json();
+  },
+  resetGuide: (id) => request('DELETE', `api/guides/${id}`),
   templates: () => request('GET', 'api/templates'),
   createTemplate: (taskId, name) => request('POST', 'api/templates', { task_id: taskId, name }),
   renameTemplate: (id, name) => request('PUT', `api/templates/${id}`, { name }),

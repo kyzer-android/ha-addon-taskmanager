@@ -27,6 +27,7 @@ Version **0.4.0** : première implémentation complète du [cahier des charges](
 | Interface de gestion (Ingress) avec créateur à tuiles | ✅ |
 | Médias : ajout de vidéos/sons (fichier ou caméra du téléphone), suppression de ses propres fichiers | ✅ |
 | Agendas : import automatique des calendriers cochés, masquage d'un événement | ✅ |
+| Onglet Aide (guides Markdown génériques, remplaçables par l'administrateur) ; l'aidant ne voit que Fil / Créateur / Vue tablette | ✅ |
 | Vue tablette (page de l'add-on, fond au choix, jours adaptés à la largeur) et rôles aidant / tablette | ✅ voir [`docs/vue-tablette.md`](docs/vue-tablette.md) |
 | Réponse vocale par IA | ⏳ V2 (point d'entrée `POST /api/answer` déjà prêt) |
 

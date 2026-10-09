@@ -1,4 +1,4 @@
-"""Rôles d'accès : administrateur / aidant (interface complète) ou tablette (lecture seule du fil)."""
+"""Rôles d'accès : administrateur (tout), aidant (fil, créateur, vue tablette) ou tablette (lecture seule du fil)."""
 
 from __future__ import annotations
 
@@ -16,8 +16,28 @@ TABLET_API = {"/api/me", "/api/tablet"}
 TABLET_API_PREFIXES = ("/api/image/",)
 
 
+# Réservé aux administrateurs HA : configuration, utilisateurs, images, journal, guides.
+ADMIN_ONLY_PREFIXES = ("/api/guides", "/api/journal", "/api/users", "/api/images")
+
+
 def is_full(role: str) -> bool:
+    """Interface de gestion (administrateur ou aidant), par opposition à la vue tablette."""
     return role in (FULL, CAREGIVER)
+
+
+def is_admin(role: str) -> bool:
+    return role == FULL
+
+
+def caregiver_may(method: str, path: str) -> bool:
+    """Un aidant gère les tâches, modèles, médias et calendrier ; pas la configuration."""
+    if not path.startswith("/api/"):
+        return True
+    if path.startswith(ADMIN_ONLY_PREFIXES) and not path.startswith("/api/image/"):
+        return False
+    if path == "/api/config" and method not in ("GET", "HEAD"):
+        return False
+    return True
 
 
 def tablet_may(method: str, path: str) -> bool:

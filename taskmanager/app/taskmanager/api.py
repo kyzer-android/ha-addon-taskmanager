@@ -61,7 +61,22 @@ async def role_guard(request: web.Request, handler):
     request["role"] = role
     if role == access.TABLET and not access.tablet_may(request.method, request.path):
         return web.json_response({"error": "forbidden"}, status=403)
+    if role == access.CAREGIVER and not access.caregiver_may(request.method, request.path):
+        return web.json_response({"error": "forbidden"}, status=403)
     return await handler(request)
+
+
+# Guides d'aide : version générique livrée avec l'add-on, remplaçable par l'administrateur.
+GUIDES = {
+    "serveur": ("Serveur d'appel vidéo", "serveur-appel-video.md"),
+    "tablette": ("Ajouter une tablette", "ajouter-une-tablette.md"),
+}
+DEFAULT_GUIDES_DIR = Path(__file__).resolve().parent.parent / "guides"
+MAX_GUIDE_BYTES = 2 * 1024 * 1024
+
+
+def custom_guide_path(engine: Engine, guide: str) -> Path:
+    return engine.storage.dir / "guides" / f"{guide}.md"
 
 
 IMAGE_EXT = {"jpg", "jpeg", "png", "webp", "gif"}
@@ -188,7 +203,7 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     @routes.get("/api/me")
     async def me(request: web.Request) -> web.Response:
         role = request["role"]
-        return web.json_response({"role": role, "full": access.is_full(role)})
+        return web.json_response({"role": role, "full": access.is_full(role), "admin": access.is_admin(role)})
 
     @routes.get("/api/users")
     async def ha_users(_: web.Request) -> web.Response:
@@ -353,6 +368,51 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
     async def run(request: web.Request) -> web.Response:
         task = find(request)
         return web.json_response({"started": engine.start_task(task)})
+
+    @routes.get("/api/guides")
+    async def list_guides(_: web.Request) -> web.Response:
+        return web.json_response([
+            {"id": gid, "title": title, "custom": custom_guide_path(engine, gid).is_file()}
+            for gid, (title, _file) in GUIDES.items()])
+
+    def guide_id(request: web.Request) -> str:
+        gid = request.match_info["guide_id"]
+        if gid not in GUIDES:
+            raise web.HTTPNotFound()
+        return gid
+
+    @routes.get("/api/guides/{guide_id}")
+    async def read_guide(request: web.Request) -> web.Response:
+        gid = guide_id(request)
+        custom = custom_guide_path(engine, gid)
+        path = custom if custom.is_file() else DEFAULT_GUIDES_DIR / GUIDES[gid][1]
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = "# Guide introuvable\n\nLe fichier de ce guide est absent."
+        return web.json_response({"id": gid, "title": GUIDES[gid][0], "markdown": text, "custom": custom.is_file()})
+
+    @routes.put("/api/guides/{guide_id}")
+    async def replace_guide(request: web.Request) -> web.Response:
+        """Remplace le guide par le Markdown envoyé (texte brut)."""
+        gid = guide_id(request)
+        data = await request.read()
+        if not data.strip() or len(data) > MAX_GUIDE_BYTES:
+            raise web.HTTPBadRequest(text="Fichier vide ou trop gros (2 Mo maximum)")
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            raise web.HTTPBadRequest(text="Le fichier doit être en UTF-8")
+        path = custom_guide_path(engine, gid)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return web.json_response({"id": gid, "custom": True})
+
+    @routes.delete("/api/guides/{guide_id}")
+    async def reset_guide(request: web.Request) -> web.Response:
+        gid = guide_id(request)
+        custom_guide_path(engine, gid).unlink(missing_ok=True)
+        return web.json_response({"id": gid, "custom": False})
 
     @routes.get("/api/templates")
     async def list_templates(request: web.Request) -> web.Response:

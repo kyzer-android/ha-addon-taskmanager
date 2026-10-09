@@ -5,6 +5,7 @@ import { renderCreator } from './creator.js';
 import { renderSettings } from './settings.js';
 import { renderJournal } from './journal.js';
 import { renderTablet } from './tablet.js';
+import { renderHelp } from './help.js';
 import { api } from './api.js';
 
 const pages = [
@@ -12,8 +13,9 @@ const pages = [
   { id: 'creator', label: 'Créateur', render: renderCreator },
   { id: 'tablet', label: 'Vue tablette', wide: true,
     render: (root, ctx, showPage) => renderTablet(root, ctx, showPage, { preview: true }) },
-  { id: 'settings', label: 'Configuration', render: renderSettings },
-  { id: 'journal', label: 'Journal', render: renderJournal },
+  { id: 'settings', label: 'Configuration', render: renderSettings, adminOnly: true },
+  { id: 'journal', label: 'Journal', render: renderJournal, adminOnly: true },
+  { id: 'help', label: 'Aide', render: renderHelp, adminOnly: true },
 ];
 
 const context = { editTask: null };
@@ -43,7 +45,9 @@ const start = async () => {
     await renderTablet(main, context, show, { standalone: true });
     return;
   }
-  pages.forEach((page) => {
+  // Un aidant voit le fil, le créateur et la vue tablette ; seuls les administrateurs voient le reste.
+  const isAdmin = role.admin !== false;
+  pages.filter((page) => isAdmin || !page.adminOnly).forEach((page) => {
     nav.append(h('button', {
       class: 'app-nav-link',
       'data-page': page.id,

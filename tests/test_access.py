@@ -161,3 +161,12 @@ def test_guides_default_replace_reset(engine):
         assert (await client.delete("/api/guides/serveur")).status == 200
         assert (await (await client.get("/api/guides/serveur")).json())["custom"] is False
     run_with(engine, scenario)
+
+
+def test_browsers_endpoint_for_caregiver_not_tablet(engine):
+    setup_users(engine)
+
+    async def scenario(client):
+        assert (await client.get("/api/browsers", headers={"X-Remote-User-Id": "u1"})).status == 200
+        assert (await client.get("/api/browsers", headers={"X-Remote-User-Id": "tab1"})).status == 403
+    run_with(engine, scenario)

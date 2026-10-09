@@ -54,6 +54,7 @@ const DOMAINS = {
 export const renderSettings = async (root) => {
   const config = await api.config();
   const entities = await loadEntities();
+  const browsers = await api.browsers().catch(() => []);
   const usersReply = await api.users().catch(() => ({}));
   const haUsers = { available: Boolean(usersReply.available), users: Array.isArray(usersReply.users) ? usersReply.users : [] };
   const page = h('div');
@@ -87,12 +88,25 @@ export const renderSettings = async (root) => {
       help: 'Le capteur de l\'extension SIP : il passe à « Busy » quand la tablette est en appel.' },
     { key: 'extension', label: 'Extension SIP de la tablette', kind: 'text', help: 'Par exemple : 102. Sert à appeler cette tablette en cas d\'escalade.' },
     { key: 'browser_id', label: 'Identifiant du navigateur (Browser ID)', kind: 'text',
-      help: 'L\'identifiant Browser Mod de cette tablette, pour y ouvrir les fenêtres plein écran.' },
+      help: 'L\'identifiant Browser Mod de cette tablette, pour y ouvrir les fenêtres plein écran. Choisi parmi les navigateurs connus de Browser Mod.' },
     { key: 'presence_sensor', label: 'Détecteur de présence', kind: 'entity', domains: DOMAINS.presence, allowEmpty: true,
       help: 'Facultatif : radar ou capteur de mouvement de cette pièce.' },
     { key: 'is_default', label: 'Tablette par défaut', kind: 'checkbox',
       help: 'Utilisée pour les appels quand personne n\'est détecté.' },
   ];
+
+  // Liste des navigateurs Browser Mod : évite les fautes de frappe sur le Browser ID.
+  const browserField = (spec, current) => {
+    if (!browsers.length) {
+      return { ...spec, help: `${spec.help} (Liste indisponible : saisie manuelle.)` };
+    }
+    const known = browsers.some((item) => item.browser_id === current);
+    const options = [{ value: '', label: '— Choisir un navigateur —' },
+      ...browsers.map((item) => ({ value: item.browser_id,
+        label: item.name && item.name !== item.browser_id ? `${item.browser_id} (${item.name})` : item.browser_id }))];
+    if (current && !known) options.push({ value: current, label: `⚠️ ${current} (inconnu de Browser Mod)` });
+    return { ...spec, kind: 'select', options };
+  };
 
   const editRoom = (room) => {
     const isNew = !room;
@@ -101,7 +115,8 @@ export const renderSettings = async (root) => {
     openForm({
       title: isNew ? 'Ajouter une pièce' : `Modifier : ${base.name}`,
       values: { ...base, is_default: config.default_room_id === base.id },
-      fields: ROOM_FIELDS, entities,
+      fields: ROOM_FIELDS.map((spec) => (spec.key === 'browser_id' ? browserField(spec, base.browser_id) : spec)),
+      entities,
       onSave: ({ is_default: isDefault, ...values }) => {
         const index = config.rooms.findIndex((item) => item.id === values.id);
         if (index >= 0) config.rooms[index] = values; else config.rooms.push(values);
@@ -124,7 +139,8 @@ export const renderSettings = async (root) => {
     [line('🎬', room.media_player && nameOf(room.media_player)), line('💡', room.screen && nameOf(room.screen)),
       line('📞', [room.extension && `extension ${room.extension}`, room.call_sensor && nameOf(room.call_sensor)]
         .filter(Boolean).join(' — ')),
-      line('🌐', room.browser_id && `Browser ID : ${room.browser_id}`),
+      line('🌐', room.browser_id && `Browser ID : ${room.browser_id}${browsers.length
+        && !browsers.some((item) => item.browser_id === room.browser_id) ? ' ⚠️ inconnu de Browser Mod' : ''}`),
       line('🚶', room.presence_sensor && nameOf(room.presence_sensor))],
     () => editRoom(room), () => removeRoom(room))), 'Aucune pièce : ajoutes-en une.');
 

@@ -26,6 +26,7 @@ export const api = {
     return response.json();
   },
   entities: () => request('GET', 'api/entities'),
+  browsers: () => request('GET', 'api/browsers'),
   media: () => request('GET', 'api/media'),
   tasks: () => request('GET', 'api/tasks'),
   saveTask: (task) => request('POST', 'api/tasks', task),

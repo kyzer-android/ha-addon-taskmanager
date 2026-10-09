@@ -138,3 +138,34 @@ def test_ws_call_returns_result_or_raises():
                     raise AssertionError("RuntimeError attendue")
 
     asyncio.run(scenario())
+
+
+def test_browsers_come_from_browser_mod_devices():
+    async def websocket(request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        await ws.send_json({"type": "auth_required"})
+        await ws.receive_json()
+        await ws.send_json({"type": "auth_ok"})
+        message = await ws.receive_json()
+        devices = [
+            {"id": "d1", "name": "Tablette salon", "name_by_user": None, "identifiers": [["browser_mod", "tablette-salon"]]},
+            {"id": "d2", "name": "Tablette chambre", "name_by_user": "Chambre", "identifiers": [["browser_mod", "Tablette-Chambre"]]},
+            {"id": "d3", "name": "Lampe", "identifiers": [["hue", "abc"]]}]
+        await ws.send_json({"id": message["id"], "type": "result", "success": True, "result": devices})
+        await asyncio.sleep(0.1)
+        return ws
+
+    async def scenario():
+        app = web.Application()
+        app.router.add_get("/websocket", websocket)
+        async with TestServer(app) as server:
+            async with aiohttp.ClientSession() as session:
+                client = HaClient(session, "secret", str(server.make_url("")).rstrip("/"))
+                assert await client.browsers() == [
+                    {"browser_id": "Tablette-Chambre", "name": "Chambre"},
+                    {"browser_id": "tablette-salon", "name": "Tablette salon"}]
+                broken = HaClient(session, "secret", "http://127.0.0.1:1")
+                assert await broken.browsers() == []
+
+    asyncio.run(scenario())

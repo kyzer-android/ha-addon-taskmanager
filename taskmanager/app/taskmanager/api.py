@@ -275,6 +275,12 @@ def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
             items.append({**entity, "area": extra.get("area", ""), "device": extra.get("device", "")})
         return web.json_response(items)
 
+    @routes.get("/api/browsers")
+    async def browsers(_: web.Request) -> web.Response:
+        """Navigateurs connus de Browser Mod, pour choisir le Browser ID d'une pièce."""
+        found = await engine.ha.browsers() if hasattr(engine.ha, "browsers") else []
+        return web.json_response(found)
+
     @routes.get("/api/media")
     async def media(_: web.Request) -> web.Response:
         return web.json_response(list_media(engine.media_dir))

@@ -160,6 +160,24 @@ class HaClient:
             }
         return info
 
+    async def browsers(self) -> list[dict[str, str]]:
+        """Navigateurs enregistrés dans Browser Mod : [{browser_id, name}] (vide si indisponible).
+
+        Browser Mod crée un appareil par navigateur, identifié par (« browser_mod », Browser ID).
+        """
+        try:
+            data = await self.ws_commands(["config/device_registry/list"])
+        except Exception as err:  # noqa: BLE001 - la saisie manuelle reste possible
+            _LOGGER.warning("Registre des appareils indisponible (%s)", err)
+            return []
+        found: dict[str, dict[str, str]] = {}
+        for device in data.get("config/device_registry/list", []):
+            for identifier in device.get("identifiers") or []:
+                if len(identifier) == 2 and identifier[0] == "browser_mod" and identifier[1]:
+                    name = device.get("name_by_user") or device.get("name") or ""
+                    found[str(identifier[1])] = {"browser_id": str(identifier[1]), "name": name}
+        return sorted(found.values(), key=lambda item: item["browser_id"].lower())
+
     # ---- WebSocket ------------------------------------------------------------
     def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="ha-websocket")

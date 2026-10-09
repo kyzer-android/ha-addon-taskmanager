@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.1
+- **Browser ID choisi dans une liste** : le champ de la pièce propose les navigateurs enregistrés dans Browser Mod (lus dans le registre des appareils de HA) au lieu d'une saisie libre. Un ID inconnu de Browser Mod est signalé par ⚠️ dans le formulaire et dans la liste des pièces (une faute de frappe empêche le popup d'appel de s'ouvrir). Si la liste est indisponible, la saisie manuelle reste possible.
+
 ## 0.8.0
 - **Rôles** : un aidant (non administrateur HA) ne voit plus que **Fil de la journée, Créateur et Vue tablette** — contrôlé aussi côté serveur (pas de configuration, utilisateurs, images, journal ni guides). Un administrateur HA voit tout, même s'il est listé comme aidant.
 - **Nouvel onglet Aide** (administrateurs) : guides « Serveur d'appel vidéo » et « Ajouter une tablette » affichés avec une vraie mise en page (sommaire, tableaux, blocs de code avec bouton Copier, encadrés).

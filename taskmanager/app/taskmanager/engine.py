@@ -297,13 +297,25 @@ class Engine:
         return outcome
 
     async def _run_children(self, node: dict[str, Any], outcome: str | None) -> None:
-        for child in node.get("children", []):
-            trigger = child["trigger"]
-            if trigger in ("yes", "no", "no_answer"):
-                if trigger == outcome:
-                    await self.run_node(child["node"])
-            elif trigger == "sensor":
-                await self._run_sensor_child(child)
+        # Les minuteurs démarrent tous ensemble à la fin de la tâche parente (non cumulatifs).
+        timers = [asyncio.ensure_future(self._run_timer_child(child))
+                  for child in node.get("children", []) if child["trigger"] == "timer"]
+        try:
+            for child in node.get("children", []):
+                trigger = child["trigger"]
+                if trigger in ("yes", "no", "no_answer"):
+                    if trigger == outcome:
+                        await self.run_node(child["node"])
+                elif trigger == "sensor":
+                    await self._run_sensor_child(child)
+        finally:
+            if timers:
+                await asyncio.gather(*timers, return_exceptions=True)
+
+    async def _run_timer_child(self, child: dict[str, Any]) -> None:
+        seconds = float((child.get("timer") or {}).get("seconds", 300))
+        await self.sleep(seconds)
+        await self.run_node(child["node"])
 
     async def _run_sensor_child(self, child: dict[str, Any]) -> None:
         sensor = child.get("sensor") or {}

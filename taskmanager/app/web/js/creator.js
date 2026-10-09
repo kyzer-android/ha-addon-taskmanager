@@ -2,7 +2,7 @@ import { openTemplates } from './templates.js';
 import { askUpload } from './upload-dialog.js';
 import { api } from './api.js';
 import { h, clear, field, toast, todayIso } from './dom.js';
-import { entityPicker, loadEntities } from './picker.js';
+import { loadEntities } from './picker.js';
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const TRIGGER_LABELS = {
@@ -10,6 +10,7 @@ const TRIGGER_LABELS = {
   no: 'Si réponse NON',
   no_answer: 'Si aucune réponse',
   sensor: 'Tant qu\'un capteur est actif',
+  timer: 'Après un délai',
 };
 const TILES = [
   { id: 'task', label: 'Tâche', icon: '✔️', cls: 'tile-task' },
@@ -78,6 +79,7 @@ export const renderCreator = async (root, context, show) => {
       node.children.push({
         trigger: node.question ? 'yes' : 'sensor',
         sensor: { entity_id: '', state: 'on', repeat_minutes: 10 },
+        timer: { seconds: 300 },
         node: newNode('Sous-tâche'),
       });
     }
@@ -120,6 +122,7 @@ export const renderCreator = async (root, context, show) => {
       target.children.push({
         trigger: target.question ? 'yes' : 'sensor',
         sensor: { entity_id: '', state: 'on', repeat_minutes: 10 },
+        timer: { seconds: 300 },
         node,
       });
     }
@@ -251,13 +254,20 @@ export const renderCreator = async (root, context, show) => {
         draw();
       } }, 'Supprimer la sous-tâche')),
     child.trigger === 'sensor' ? h('div', { class: 'row' },
-      field('Capteur', entityPicker({
-        entities, value: child.sensor.entity_id, pinned: config.catalog.map((item) => item.entity_id),
-        domains: ['sensor', 'binary_sensor', 'input_boolean', 'input_select', 'person', 'switch', 'light'],
-        onChange: (entityId) => { child.sensor.entity_id = entityId; } })),
+      field('Capteur', config.catalog.length
+        ? h('select', { onchange: (event) => { child.sensor.entity_id = event.target.value; } },
+          [h('option', { value: '' }, '— choisir —'),
+            ...config.catalog.map((item) => h('option', {
+              value: item.entity_id, selected: child.sensor.entity_id === item.entity_id }, item.name))])
+        : h('span', { class: 'hint' }, 'Aucune entité dans le catalogue : demande à un administrateur de l\'ajouter (Configuration → Catalogue d\'entités).')),
       field('État attendu', h('input', { type: 'text', value: child.sensor.state, oninput: bind(child.sensor, 'state') })),
       field('Rejouer toutes les (min)', h('input', { type: 'number', min: 0.1, step: 0.5, value: child.sensor.repeat_minutes,
         oninput: bind(child.sensor, 'repeat_minutes', Number) }))) : null,
+    child.trigger === 'timer' ? h('div', { class: 'row' },
+      field('Minutes', h('input', { type: 'number', min: 0, step: 1, value: Math.floor((child.timer?.seconds ?? 300) / 60),
+        oninput: (event) => { child.timer = child.timer || {}; child.timer.seconds = Number(event.target.value || 0) * 60 + ((child.timer.seconds ?? 300) % 60); } })),
+      field('Secondes', h('input', { type: 'number', min: 0, max: 59, step: 1, value: (child.timer?.seconds ?? 300) % 60,
+        oninput: (event) => { child.timer = child.timer || {}; const sec = Math.min(59, Number(event.target.value || 0)); child.timer.seconds = Math.floor((child.timer.seconds ?? 300) / 60) * 60 + sec; } }))) : null,
     renderNode(child.node, false));
 
   const renderNode = (node, isRoot) => {

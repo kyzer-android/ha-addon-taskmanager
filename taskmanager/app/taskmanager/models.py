@@ -56,7 +56,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 USER_ROLES = ("admin", "aidant", "tablette")
-TRIGGERS = ("yes", "no", "no_answer", "sensor")
+TRIGGERS = ("yes", "no", "no_answer", "sensor", "timer")
 MEDIA_KINDS = ("video", "audio", "none")
 SCHEDULE_TYPES = ("daily", "once")
 
@@ -141,6 +141,13 @@ def clean_node(node: dict[str, Any]) -> dict[str, Any]:
                 "state": str(sensor.get("state") or "on"),
                 "repeat_minutes": max(0.1, float(sensor.get("repeat_minutes") or 10)),
             }
+        elif trigger == "timer":
+            timer = child.get("timer") or {}
+            try:
+                seconds = int(float(timer.get("seconds", 300)))
+            except (TypeError, ValueError):
+                seconds = 300
+            entry["timer"] = {"seconds": max(1, seconds)}
         children.append(entry)
     out["children"] = children
     return out

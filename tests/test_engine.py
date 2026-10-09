@@ -356,3 +356,26 @@ def test_build_html_escapes_text_and_ids():
                                   rid="q1", room_id="salon", video_percent=80, button_height=90)
     assert "&lt;b&gt;" in html and "<b>" not in html and "&amp;b=" in html
     assert "answer|q1|salon|oui" in html and "video|q1|salon|ended" in html
+
+
+def test_timer_children_start_together_after_parent(engine, ha):
+    waits = []
+
+    async def sleeper(seconds):
+        if seconds >= 60:
+            waits.append(seconds)
+        await asyncio.sleep(0)
+
+    engine.sleep = sleeper
+    children = [{"trigger": "timer", "timer": {"seconds": 120}, "node": node(media=AUDIO)},
+                {"trigger": "timer", "timer": {"seconds": 300}, "node": node(media=AUDIO)}]
+    run(engine.run_node(node(children=children)))
+    assert sorted(waits) == [120, 300]  # lancés ensemble, pas cumulés
+    assert len(ha.services("media_player", "play_media")) >= 4  # les 2 sous-tâches ont joué
+
+
+def test_clean_timer_child():
+    cleaned = models.clean_node({"children": [{"trigger": "timer", "timer": {"seconds": "90"}, "node": {}},
+                                              {"trigger": "timer", "node": {}}]})
+    assert cleaned["children"][0]["timer"] == {"seconds": 90}
+    assert cleaned["children"][1]["timer"] == {"seconds": 300}

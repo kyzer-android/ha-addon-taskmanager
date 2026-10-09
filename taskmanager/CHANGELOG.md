@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+- **Nouveau déclencheur de sous-tâche « Après un délai »** : minutes + secondes (5 min par défaut), compté à partir de la fin de la tâche parente (après la vidéo / la réponse), quelle que soit la réponse. Plusieurs minuteurs sur un même parent démarrent ensemble (non cumulés). La tâche reste « en cours » jusqu'à la fin des minuteurs ; un redémarrage de l'add-on les perd.
+- **Sous-tâche « Tant qu'un capteur est actif »** : la liste des capteurs ne propose plus que les entités du Catalogue d'entités (Configuration), avec leur nom. Catalogue vide : un message invite à demander à un administrateur de l'alimenter.
+
 ## 0.9.0
 - **Vidéo + question dans un seul popup** : la vidéo (80 % du haut de l'écran) et les boutons OUI / NON dessous sont dans le même popup plein écran. À la fin de la vidéo, la question (titre + gros boutons) prend toute la place, sans rien rouvrir. Le délai de réponse ne démarre qu'à la fin de la vidéo ; répondre pendant la vidéo l'arrête. La fin de lecture est lue directement sur la vidéo (plus de délai de ~25 s). Contrôles du lecteur masqués. L'ancien mode (deux popups) reste dans Configuration → Avancé → « Affichage vidéo + question » pour revenir en arrière.
 - Si la vidéo ne démarre pas (lecture automatique bloquée), la question seule s'affiche à sa place et un avertissement est noté au journal.

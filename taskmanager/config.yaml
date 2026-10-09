@@ -1,5 +1,5 @@
 name: "Gestionnaire de tâches"
-version: "0.9.2"
+version: "0.9.3"
 slug: taskmanager
 description: "Rappels vidéo/audio, questions OUI/NON et appels d'escalade sur tablettes murales"
 url: "https://github.com/kyzer-android/ha-addon-taskmanager"

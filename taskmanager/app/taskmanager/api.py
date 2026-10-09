@@ -39,6 +39,14 @@ class IngressApplication(web.Application):
 
 
 @web.middleware
+async def no_cache(request: web.Request, handler):
+    """Les fichiers de l'interface sont revalidés à chaque chargement (sinon un ancien JS reste en cache après une mise à jour)."""
+    response = await handler(request)
+    response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
+@web.middleware
 async def ingress_only(request: web.Request, handler):
     """N'accepte que le Supervisor (Ingress), sauf mode développement."""
     if os.environ.get("TM_ALLOW_ANY") == "1":
@@ -177,7 +185,7 @@ def list_media(media_dir: str) -> list[dict[str, str]]:
 
 
 def build_app(engine: Engine, web_dir: str | Path) -> web.Application:
-    app = IngressApplication(middlewares=[ingress_only, role_guard])
+    app = IngressApplication(middlewares=[no_cache, ingress_only, role_guard])
     app["engine"] = engine
     storage = engine.storage
     routes = web.RouteTableDef()

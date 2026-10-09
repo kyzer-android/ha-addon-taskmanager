@@ -190,3 +190,12 @@ def test_admin_role_declared_in_addon_does_not_need_ha_user_list(engine):
     assert [u["id"] for u in models.caregivers(engine.config)] == ["c1", "c2"]
     assert models.clean_user({"role": "admin", "extension": "100"})["extension"] == "100"
     assert models.clean_user({"role": "tablette", "extension": "100"})["extension"] == ""
+
+
+def test_static_files_are_revalidated(engine):
+    async def scenario(client):
+        for path in ("/", "/js/creator.js", "/css/app.css"):
+            response = await client.get(path)
+            assert response.status == 200, path
+            assert response.headers["Cache-Control"] == "no-cache", path
+    run_with(engine, scenario)

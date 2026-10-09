@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.3
+- **Plus d'ancienne interface en cache** : le serveur demande au navigateur de revérifier les fichiers à chaque chargement (`Cache-Control: no-cache`). Après une mise à jour, le navigateur pouvait garder l'ancien JavaScript avec la nouvelle CSS (ex. sélecteur d'heure à roue ou sous-tâches qui ne se sélectionnent pas alors que la 0.9.2 les corrigeait).
+
 ## 0.9.2
 - **Créateur — sous-tâches** : corrige la sélection. Un clic (ou la saisie) dans le titre d'une tâche / sous-tâche la sélectionne ; une sous-tâche nouvellement créée est sélectionnée automatiquement, donc les tuiles (audio, vidéo, question, sous-tâche) s'ajoutent bien dedans et les sous-tâches peuvent s'empiler. Carte sélectionnée bien visible (fond bleu, bordure épaisse) et bandeau « Les tuiles s'ajoutent dans : … ».
 - **Créateur — heure** : champ à saisie directe (`0810` devient `08:10`), sans sélecteur à roue, clavier numérique sur mobile.

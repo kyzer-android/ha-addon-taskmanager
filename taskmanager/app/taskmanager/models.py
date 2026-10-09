@@ -54,7 +54,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "hidden_events": [],
 }
 
-USER_ROLES = ("aidant", "tablette")
+USER_ROLES = ("admin", "aidant", "tablette")
 TRIGGERS = ("yes", "no", "no_answer", "sensor")
 MEDIA_KINDS = ("video", "audio", "none")
 SCHEDULE_TYPES = ("daily", "once")
@@ -192,20 +192,20 @@ def clean_task(task: dict[str, Any]) -> dict[str, Any]:
 
 
 def clean_user(raw: dict[str, Any]) -> dict[str, Any]:
-    """Un utilisateur : compte HA + rôle (aidant ou tablette) + extension SIP (aidant)."""
+    """Un utilisateur : compte HA + rôle (administrateur, aidant ou tablette) + extension SIP (sauf tablette)."""
     role = raw.get("role") if raw.get("role") in USER_ROLES else "aidant"
     return {
         "id": str(raw.get("id") or new_id("u")),
         "ha_user_id": str(raw.get("ha_user_id") or ""),
         "name": str(raw.get("name") or ""),
         "role": role,
-        "extension": str(raw.get("extension") or "") if role == "aidant" else "",
+        "extension": str(raw.get("extension") or "") if role != "tablette" else "",
     }
 
 
 def caregivers(config: dict[str, Any]) -> list[dict[str, Any]]:
-    """Utilisateurs appelables en escalade."""
-    return [user for user in config.get("users", []) if user.get("role") == "aidant"]
+    """Utilisateurs appelables en escalade (administrateurs et aidants ayant une extension)."""
+    return [user for user in config.get("users", []) if user.get("role") in ("admin", "aidant")]
 
 
 def merge_config(raw: dict[str, Any]) -> dict[str, Any]:

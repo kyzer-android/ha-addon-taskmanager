@@ -170,3 +170,23 @@ def test_browsers_endpoint_for_caregiver_not_tablet(engine):
         assert (await client.get("/api/browsers", headers={"X-Remote-User-Id": "u1"})).status == 200
         assert (await client.get("/api/browsers", headers={"X-Remote-User-Id": "tab1"})).status == 403
     run_with(engine, scenario)
+
+
+def test_admin_role_declared_in_addon_does_not_need_ha_user_list(engine):
+    engine.storage.set_config({**engine.config, "users": [
+        {"id": "c1", "name": "Mathieu", "role": "admin", "ha_user_id": "u1", "extension": "100"},
+        {"id": "c2", "name": "Aide", "role": "aidant", "ha_user_id": "other", "extension": "101"}]})
+    engine.ha.ha_users = None  # liste des comptes HA indisponible
+
+    async def scenario(client):
+        me = await (await client.get("/api/me", headers={"X-Remote-User-Id": "u1"})).json()
+        assert me == {"role": "admin", "full": True, "admin": True}
+        aide = await (await client.get("/api/me", headers={"X-Remote-User-Id": "other"})).json()
+        assert aide["role"] == "aidant" and aide["admin"] is False
+        assert (await client.get("/api/guides", headers={"X-Remote-User-Id": "u1"})).status == 200
+        assert (await client.get("/api/guides", headers={"X-Remote-User-Id": "other"})).status == 403
+    run_with(engine, scenario)
+    # administrateurs et aidants sont appelables, pas les comptes « tablette »
+    assert [u["id"] for u in models.caregivers(engine.config)] == ["c1", "c2"]
+    assert models.clean_user({"role": "admin", "extension": "100"})["extension"] == "100"
+    assert models.clean_user({"role": "tablette", "extension": "100"})["extension"] == ""

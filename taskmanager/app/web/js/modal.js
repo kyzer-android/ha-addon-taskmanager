@@ -63,7 +63,7 @@ export const openForm = ({ title, values, fields, entities, onSave }) => {
           spec.help ? h('span', { class: 'modal-help' }, spec.help) : null));
     }
     return h('div', { class: `modal-field ${errors.has(spec.key) ? 'has-error' : ''}` },
-      h('span', { class: 'modal-label' }, spec.label, spec.required ? h('span', { class: 'modal-required' }, ' *') : null),
+      h('span', { class: 'modal-label' }, spec.label, (typeof spec.required === 'function' ? spec.required(draft) : spec.required) ? h('span', { class: 'modal-required' }, ' *') : null),
       spec.help ? h('span', { class: 'modal-help' }, spec.help) : null,
       control(spec),
       errors.has(spec.key) ? h('span', { class: 'modal-error' }, 'Champ obligatoire') : null);
@@ -77,7 +77,7 @@ export const openForm = ({ title, values, fields, entities, onSave }) => {
 
   const save = () => {
     errors.clear();
-    visible().filter((spec) => spec.required && !String(draft[spec.key] || '').trim())
+    visible().filter((spec) => (typeof spec.required === 'function' ? spec.required(draft) : spec.required) && !String(draft[spec.key] || '').trim())
       .forEach((spec) => errors.add(spec.key));
     if (errors.size) { render(); return; }
     onSave(draft);

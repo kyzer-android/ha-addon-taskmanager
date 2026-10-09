@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.3
+- **Rôle « Administrateur » dans l'add-on** (Configuration → Utilisateurs) : voit toute l'interface sans dépendre de la liste des comptes de Home Assistant (qui peut être refusée à l'add-on). Il peut être appelé en escalade s'il a une extension. Corrige un administrateur HA déclaré « aidant » qui se retrouvait en vue aidant. Si tu es déjà bloqué : dans `config.json` du dossier de configuration de l'add-on, mets `"role": "admin"` sur ton compte et redémarre l'add-on.
+- **Configuration allégée** : par défaut seuls Pièces, Utilisateurs, Catalogue d'entités, Calendriers et Vue tablette sont visibles ; le reste (questions et lecture, appels d'escalade, médias, sous-tâches liées à un capteur, style vidéo) est dans un bloc repliable « ⚙️ Avancé ».
+
 ## 0.8.2
 - **Capteur d'appel déduit de l'extension SIP** : `sensor.pjsip_<ext>_<ext>_state` est utilisé automatiquement. Le champ « Capteur d'appel (avancé, facultatif) » reste pour forcer un autre capteur (les pièces déjà configurées gardent leur valeur). La liste des pièces affiche ⚠️ si le capteur n'existe pas dans HA.
 - **Écran** : la liste ne propose que les entités dont le nom contient « screen » ou « ecran » (lien « Afficher toutes les entités » pour contourner).

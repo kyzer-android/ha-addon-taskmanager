@@ -56,12 +56,15 @@ async def resolve_role(engine: Any, user_id: str) -> str:
     if not user_id:
         _LOGGER.warning("Ingress n'a pas transmis le compte connecté : accès complet accordé")
         return FULL
+    listed = next((user for user in users if user.get("ha_user_id") == user_id), None)
+    if listed and listed.get("role") == "admin":
+        return FULL  # administrateur déclaré dans l'add-on : ne dépend pas de la liste des comptes HA
     ha_users = await engine.ha.users() if hasattr(engine.ha, "users") else None
     if ha_users and any(item["id"] == user_id and item["is_admin"] for item in ha_users):
         return FULL
-    listed = next((user for user in users if user.get("ha_user_id") == user_id), None)
     if listed:
-        return CAREGIVER if listed.get("role") == "aidant" else TABLET
+        role = listed.get("role")
+        return FULL if role == "admin" else CAREGIVER if role == "aidant" else TABLET
     if ha_users is None:
         _LOGGER.warning("Comptes HA indisponibles : compte non déclaré %s traité comme administrateur", user_id)
         return FULL

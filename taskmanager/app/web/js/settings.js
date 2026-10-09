@@ -152,9 +152,10 @@ export const renderSettings = async (root) => {
     () => editRoom(room), () => removeRoom(room))), 'Aucune pièce : ajoutes-en une.');
 
   // ---- Utilisateurs ----
-  const ROLES = [{ value: 'aidant', label: 'Aidant : interface complète, peut être appelé' },
+  const ROLES = [{ value: 'admin', label: 'Administrateur : voit tout, peut être appelé' },
+    { value: 'aidant', label: 'Aidant : fil, créateur et vue tablette, peut être appelé' },
     { value: 'tablette', label: 'Tablette : vue simplifiée en lecture seule' }];
-  const ROLE_LABELS = { aidant: 'Aidant', tablette: 'Tablette' };
+  const ROLE_LABELS = { admin: 'Administrateur', aidant: 'Aidant', tablette: 'Tablette' };
   const haUserName = (id) => haUsers.users.find((user) => user.id === id)?.name;
 
   const editUser = (user) => {
@@ -175,15 +176,16 @@ export const renderSettings = async (root) => {
       fields: [
         accountField,
         { key: 'role', label: 'Rôle', kind: 'select', options: ROLES, rerender: true,
-          help: 'Un administrateur de Home Assistant voit toujours l\'interface complète.' },
-        { key: 'extension', label: 'Extension SIP à appeler', kind: 'text', required: true,
-          showIf: (values) => values.role === 'aidant',
-          help: 'Par exemple : 100. C\'est l\'extension appelée en cas d\'escalade.' },
+          help: 'Un administrateur de Home Assistant voit toujours tout. Choisis « Administrateur » pour ton propre compte : ça ne dépend pas de la liste des comptes de Home Assistant.' },
+        { key: 'extension', label: 'Extension SIP à appeler', kind: 'text',
+          required: (values) => values.role === 'aidant',
+          showIf: (values) => values.role !== 'tablette',
+          help: 'Par exemple : 100. C\'est l\'extension appelée en cas d\'escalade (facultative pour un administrateur).' },
       ],
       entities,
       onSave: (values) => {
         const next = { ...values, name: haUserName(values.ha_user_id) || values.name || values.ha_user_id };
-        if (next.role !== 'aidant') next.extension = '';
+        if (next.role === 'tablette') next.extension = '';
         const index = config.users.findIndex((item) => item.id === next.id);
         if (index >= 0) config.users[index] = next; else config.users.push(next);
         draw();
@@ -286,8 +288,8 @@ export const renderSettings = async (root) => {
     h('div', { class: 'settings-grid' }, settingField({ key: 'calendar_refresh_minutes', label: 'Actualisation des calendriers',
       unit: 'minutes', help: 'Fréquence de lecture des agendas. Enregistrer la configuration actualise aussi tout de suite.' })));
 
-  const advancedPanel = () => h('details', { class: 'panel' },
-    h('summary', { class: 'panel-title' }, 'Avancé : style de la vidéo'),
+  const videoStylePanel = () => h('section', { class: 'panel' },
+    h('h2', { class: 'panel-title' }, 'Style de la vidéo'),
     h('p', { class: 'hint' }, 'CSS injecté par Browser Mod dans la fenêtre vidéo. Il masque les contrôles du lecteur (pause, barre de progression). À modifier seulement si les contrôles réapparaissent.'),
     h('textarea', { class: 'modal-input', rows: 10, oninput: (event) => { config.settings.video_style = event.target.value; } },
       config.settings.video_style));
@@ -308,7 +310,7 @@ export const renderSettings = async (root) => {
         h('button', { class: 'btn btn-secondary', onclick: () => editRoom(null) }, '＋ Ajouter une pièce')),
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Utilisateurs'),
-        h('p', { class: 'hint' }, 'Choisis les comptes Home Assistant et leur rôle. Seuls les aidants (avec une extension) peuvent être appelés en cas d\'escalade. Les administrateurs voient toujours l\'interface complète.'),
+        h('p', { class: 'hint' }, 'Choisis les comptes Home Assistant et leur rôle. Les administrateurs et les aidants ayant une extension peuvent être appelés en cas d\'escalade. Les administrateurs voient toute l\'interface, les aidants seulement le fil, le créateur et la vue tablette.'),
         usersList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editUser(null) }, '＋ Ajouter un utilisateur')),
       h('section', { class: 'panel' },
@@ -316,10 +318,12 @@ export const renderSettings = async (root) => {
         h('p', { class: 'hint' }, 'Donne un nom parlant aux capteurs : présence (radar, onMotion Fully…) ou autres capteurs pour les sous-tâches.'),
         catalogList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editCatalogItem(null) }, '＋ Ajouter une entité')),
-      ...SETTING_GROUPS.map(groupPanel),
-      tabletPanel(),
       calendarPanel(),
-      advancedPanel(),
+      tabletPanel(),
+      h('details', { class: 'advanced-block' },
+        h('summary', { class: 'advanced-summary' }, '⚙️ Avancé : lecture, appels, médias, capteurs, style vidéo'),
+        ...SETTING_GROUPS.map(groupPanel),
+        videoStylePanel()),
       h('div', { class: 'canvas-actions' }, h('span'), h('button', { class: 'btn', onclick: save }, 'Enregistrer la configuration')));
   };
 

@@ -129,6 +129,7 @@ export const renderSettings = async (root) => {
         if (isDefault) config.default_room_id = values.id;
         else if (config.default_room_id === values.id) config.default_room_id = '';
         draw();
+        persist();
       },
     });
   };
@@ -138,6 +139,7 @@ export const renderSettings = async (root) => {
     config.rooms = config.rooms.filter((item) => item.id !== room.id);
     if (config.default_room_id === room.id) config.default_room_id = '';
     draw();
+    persist();
   };
 
   const roomsList = () => list(config.rooms.map((room) => card(
@@ -189,6 +191,7 @@ export const renderSettings = async (root) => {
         const index = config.users.findIndex((item) => item.id === next.id);
         if (index >= 0) config.users[index] = next; else config.users.push(next);
         draw();
+        persist();
       },
     });
   };
@@ -204,6 +207,7 @@ export const renderSettings = async (root) => {
       if (!window.confirm(`Supprimer l'utilisateur « ${user.name} » ?`)) return;
       config.users = config.users.filter((item) => item.id !== user.id);
       draw();
+      persist();
     })), 'Aucun utilisateur : tant que la liste est vide, tout le monde voit l\'interface complète.');
 
   // ---- Catalogue ----
@@ -225,6 +229,7 @@ export const renderSettings = async (root) => {
         const index = config.catalog.findIndex((entry) => entry.id === values.id);
         if (index >= 0) config.catalog[index] = values; else config.catalog.push(values);
         draw();
+        persist();
       },
     });
   };
@@ -237,6 +242,7 @@ export const renderSettings = async (root) => {
       if (!window.confirm(`Retirer « ${item.name} » du catalogue ?`)) return;
       config.catalog = config.catalog.filter((entry) => entry.id !== item.id);
       draw();
+      persist();
     })), 'Catalogue vide : ajoutes-y des capteurs.');
 
   const settingField = (spec) => {
@@ -254,12 +260,14 @@ export const renderSettings = async (root) => {
       input);
   };
 
-  const groupPanel = (group) => h('section', { class: 'panel' },
+  let panel; // section « Vue tablette » (pour son sélecteur d'image)
+
+  const groupPanel = (group) => savable(h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, group.title),
     group.hint ? h('p', { class: 'hint' }, group.hint) : null,
-    h('div', { class: 'settings-grid' }, group.fields.map(settingField)));
+    h('div', { class: 'settings-grid' }, group.fields.map(settingField))));
 
-  const tabletPanel = () => h('section', { class: 'panel' },
+  const tabletPanel = () => savable(panel = h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, 'Vue tablette'),
     h('p', { class: 'hint' }, 'Le fil du jour que voient les comptes « Tablette ». Aperçu dans l\'onglet « Vue tablette » (enregistre d\'abord).'),
     h('div', { class: 'settings-grid' },
@@ -278,34 +286,58 @@ export const renderSettings = async (root) => {
     h('div', { class: 'modal-field' },
       h('span', { class: 'modal-label' }, 'Image de fond'),
       imagePicker({ value: config.settings.tablet_background,
-        onChange: (value) => { config.settings.tablet_background = value; } })));
+        onChange: (value) => { config.settings.tablet_background = value; panel.markDirty(); } }))));
 
-  const calendarPanel = () => h('section', { class: 'panel' },
+  const calendarPanel = () => savable(h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, 'Calendriers'),
     h('p', { class: 'hint' }, 'Les événements des calendriers cochés sont importés automatiquement dans le fil de la tablette. Les événements à masquer se choisissent dans le Créateur.'),
     entityChecklist({ entities, domains: DOMAINS.calendar, values: config.settings.calendar_entities || [],
       onChange: (values) => { config.settings.calendar_entities = values; } }),
     h('div', { class: 'settings-grid' }, settingField({ key: 'calendar_refresh_minutes', label: 'Actualisation des calendriers',
-      unit: 'minutes', help: 'Fréquence de lecture des agendas. Enregistrer la configuration actualise aussi tout de suite.' })));
+      unit: 'minutes', help: 'Fréquence de lecture des agendas. Enregistrer actualise aussi tout de suite.' }))));
 
-  const videoStylePanel = () => h('section', { class: 'panel' },
+  const videoStylePanel = () => savable(h('section', { class: 'panel' },
     h('h2', { class: 'panel-title' }, 'Style de la vidéo'),
     h('p', { class: 'hint' }, 'CSS injecté par Browser Mod dans la fenêtre vidéo. Il masque les contrôles du lecteur (pause, barre de progression). À modifier seulement si les contrôles réapparaissent.'),
     h('textarea', { class: 'modal-input', rows: 10, oninput: (event) => { config.settings.video_style = event.target.value; } },
-      config.settings.video_style));
+      config.settings.video_style)));
 
-  const save = async () => {
+  const badges = new Set();
+
+  // Écrit toute la configuration : appelé par les fenêtres (pièces, utilisateurs, entités) et par chaque section.
+  const persist = async () => {
     config.catalog.forEach((item) => { item.id = item.id || makeId('e'); });
-    await api.saveConfig(config);
-    toast('Configuration enregistrée');
+    try {
+      await api.saveConfig(config);
+      toast('Configuration enregistrée');
+      badges.forEach((badge) => { badge.hidden = true; }); // toute la configuration est écrite
+      return true;
+    } catch (error) {
+      toast(`Enregistrement impossible : ${error.message}`);
+      return false;
+    }
+  };
+
+  // Ajoute à une section son badge « non enregistré » et son propre bouton Enregistrer.
+  const savable = (panel) => {
+    const badge = h('span', { class: 'dirty-badge', hidden: true }, '● non enregistré');
+    panel.querySelector('.panel-title').append(' ', badge);
+    badges.add(badge);
+    panel.markDirty = () => { badge.hidden = false; };
+    panel.addEventListener('input', panel.markDirty);
+    panel.addEventListener('change', panel.markDirty);
+    panel.append(h('div', { class: 'section-actions' },
+      h('button', { class: 'btn', onclick: persist }, 'Enregistrer')));
+    return panel;
   };
 
   const draw = () => {
     clear(page);
+    badges.clear();
     page.append(
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, 'Pièces et tablettes'),
-        h('p', { class: 'hint' }, 'Une tablette par pièce. Rien n\'est écrit en dur : ajoute, modifie ou supprime à volonté. N\'oublie pas d\'enregistrer en bas de page.'),
+        h('p', { class: 'hint' }, 'Une tablette par pièce. Rien n\'est écrit en dur : ajoute, modifie ou supprime à volonté.'),
         roomsList(),
         h('button', { class: 'btn btn-secondary', onclick: () => editRoom(null) }, '＋ Ajouter une pièce')),
       h('section', { class: 'panel' },
@@ -323,8 +355,7 @@ export const renderSettings = async (root) => {
       h('details', { class: 'advanced-block' },
         h('summary', { class: 'advanced-summary' }, '⚙️ Avancé : lecture, appels, médias, capteurs, style vidéo'),
         ...SETTING_GROUPS.map(groupPanel),
-        videoStylePanel()),
-      h('div', { class: 'canvas-actions' }, h('span'), h('button', { class: 'btn', onclick: save }, 'Enregistrer la configuration')));
+        videoStylePanel()));
   };
 
   draw();

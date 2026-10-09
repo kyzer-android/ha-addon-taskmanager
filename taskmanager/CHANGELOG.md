@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.4
+- **Fini le double enregistrement** dans Configuration : le bouton « Enregistrer » des fenêtres (pièces, utilisateurs, entités) et « Supprimer » écrivent directement ; Calendriers, Vue tablette et chaque sous-partie d'Avancé ont leur propre bouton **Enregistrer** et un badge « ● non enregistré » ; le bouton du bas est supprimé.
+
 ## 0.8.3
 - **Rôle « Administrateur » dans l'add-on** (Configuration → Utilisateurs) : voit toute l'interface sans dépendre de la liste des comptes de Home Assistant (qui peut être refusée à l'add-on). Il peut être appelé en escalade s'il a une extension. Corrige un administrateur HA déclaré « aidant » qui se retrouvait en vue aidant. Si tu es déjà bloqué : dans `config.json` du dossier de configuration de l'add-on, mets `"role": "admin"` sur ton compte et redémarre l'add-on.
 - **Configuration allégée** : par défaut seuls Pièces, Utilisateurs, Catalogue d'entités, Calendriers et Vue tablette sont visibles ; le reste (questions et lecture, appels d'escalade, médias, sous-tâches liées à un capteur, style vidéo) est dans un bloc repliable « ⚙️ Avancé ».

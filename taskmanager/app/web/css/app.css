@@ -458,3 +458,9 @@ body.is-wide .tablet-view { min-height: calc(100vh - 150px); }
   padding: 0 var(--spacing-lg); border-radius: var(--radius-md); background: var(--color-surface);
   border: 1px solid var(--color-border); font-weight: 600; }
 .advanced-block[open] > .advanced-summary { margin-bottom: var(--spacing-md); }
+
+/* ===== Configuration : enregistrement par section ===== */
+.dirty-badge { margin-left: var(--spacing-sm); padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: #fff3cd; color: #7a5b00; vertical-align: middle; }
+.dirty-badge[hidden] { display: none; }
+.section-actions { display: flex; justify-content: flex-end; margin-top: var(--spacing-md); }

@@ -252,3 +252,13 @@ def test_answer_during_video_stops_video_everywhere(engine, ha):
     assert run(scenario()) == "yes"
     stopped = {c["entity_id"] for c in ha.services("media_player", "media_stop")}
     assert "media_player.salon" in stopped
+
+
+def test_call_popup_opens_from_derived_sensor(engine, ha):
+    room = engine.config["rooms"][0]
+    assert room["extension"] == "102"
+    room["call_sensor"] = ""  # déduit de l'extension SIP
+    run(engine.on_event("state_changed", {
+        "entity_id": "sensor.pjsip_102_102_state",
+        "old_state": {"state": "Not in use"}, "new_state": {"state": "Busy"}}))
+    assert [p for p in ha.services("browser_mod", "popup") if p["tag"] == "appel"]

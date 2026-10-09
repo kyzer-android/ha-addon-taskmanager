@@ -448,3 +448,6 @@ body.is-wide .tablet-view { min-height: calc(100vh - 150px); }
 .md-table { border-collapse: collapse; min-width: 100%; font-size: 14px; }
 .md-table th, .md-table td { border: 1px solid var(--color-border); padding: 6px 10px; text-align: left; vertical-align: top; }
 .md-table th { background: var(--color-bg); font-weight: 600; }
+
+.link-button { display: block; margin-top: var(--spacing-xs); padding: 0; background: none; border: 0;
+  color: var(--color-primary); font-size: 14px; cursor: pointer; text-decoration: underline; }

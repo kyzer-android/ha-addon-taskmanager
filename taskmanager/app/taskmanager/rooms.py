@@ -22,8 +22,17 @@ def state_of(states: Mapping[str, Mapping[str, Any]], entity_id: str) -> str:
     return str((states.get(entity_id) or {}).get("state", "unknown"))
 
 
+def call_sensor_of(room: Mapping[str, Any]) -> str:
+    """Capteur d'état d'appel : celui saisi (avancé), sinon celui déduit de l'extension SIP."""
+    explicit = str(room.get("call_sensor") or "").strip()
+    if explicit:
+        return explicit
+    extension = str(room.get("extension") or "").strip()
+    return f"sensor.pjsip_{extension}_{extension}_state" if extension else ""
+
+
 def is_in_call(room: Mapping[str, Any], states: Mapping[str, Mapping[str, Any]]) -> bool:
-    sensor = room.get("call_sensor")
+    sensor = call_sensor_of(room)
     return bool(sensor) and state_of(states, sensor) == BUSY_STATE
 
 

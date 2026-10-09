@@ -83,10 +83,12 @@ export const renderSettings = async (root) => {
     { key: 'media_player', label: 'Lecteur de la tablette', kind: 'entity', domains: DOMAINS.media, required: true,
       help: 'Le lecteur média (media_player) qui joue les vidéos et les sons sur cette tablette.' },
     { key: 'screen', label: 'Écran de la tablette', kind: 'entity', domains: DOMAINS.screen, allowEmpty: true,
-      help: 'L\'entité qui allume l\'écran, souvent « … Screen ». Sans elle, l\'écran n\'est pas allumé avant une lecture.' },
-    { key: 'call_sensor', label: 'État d\'appel de la tablette', kind: 'entity', domains: DOMAINS.callSensor, allowEmpty: true,
-      help: 'Le capteur de l\'extension SIP : il passe à « Busy » quand la tablette est en appel.' },
-    { key: 'extension', label: 'Extension SIP de la tablette', kind: 'text', help: 'Par exemple : 102. Sert à appeler cette tablette en cas d\'escalade.' },
+      filter: (entity) => /screen|ecran|écran/i.test(entity.entity_id),
+      help: 'L\'entité qui allume l\'écran (nom contenant « screen » ou « ecran »). Sans elle, l\'écran n\'est pas allumé avant une lecture.' },
+    { key: 'extension', label: 'Extension SIP de la tablette', kind: 'text',
+      help: 'Par exemple : 102. Sert à appeler cette tablette et à détecter ses appels (capteur sensor.pjsip_102_102_state déduit automatiquement).' },
+    { key: 'call_sensor', label: 'Capteur d\'appel (avancé, facultatif)', kind: 'entity', domains: DOMAINS.callSensor, allowEmpty: true,
+      help: 'À laisser vide : le capteur est déduit de l\'extension. Ne renseigner que pour forcer un autre capteur.' },
     { key: 'browser_id', label: 'Identifiant du navigateur (Browser ID)', kind: 'text',
       help: 'L\'identifiant Browser Mod de cette tablette, pour y ouvrir les fenêtres plein écran. Choisi parmi les navigateurs connus de Browser Mod.' },
     { key: 'presence_sensor', label: 'Détecteur de présence', kind: 'entity', domains: DOMAINS.presence, allowEmpty: true,
@@ -94,6 +96,10 @@ export const renderSettings = async (root) => {
     { key: 'is_default', label: 'Tablette par défaut', kind: 'checkbox',
       help: 'Utilisée pour les appels quand personne n\'est détecté.' },
   ];
+
+  // Capteur d'appel : celui forcé (avancé), sinon déduit de l'extension SIP.
+  const callSensorOf = (room) => room.call_sensor
+    || (room.extension ? `sensor.pjsip_${room.extension}_${room.extension}_state` : '');
 
   // Liste des navigateurs Browser Mod : évite les fautes de frappe sur le Browser ID.
   const browserField = (spec, current) => {
@@ -137,7 +143,8 @@ export const renderSettings = async (root) => {
   const roomsList = () => list(config.rooms.map((room) => card(
     `${room.name || 'Sans nom'}${config.default_room_id === room.id ? ' ⭐ tablette par défaut' : ''}`,
     [line('🎬', room.media_player && nameOf(room.media_player)), line('💡', room.screen && nameOf(room.screen)),
-      line('📞', [room.extension && `extension ${room.extension}`, room.call_sensor && nameOf(room.call_sensor)]
+      line('📞', [room.extension && `extension ${room.extension}`, callSensorOf(room) && nameOf(callSensorOf(room)),
+        callSensorOf(room) && !entities.some((entity) => entity.entity_id === callSensorOf(room)) ? '⚠️ capteur introuvable' : '']
         .filter(Boolean).join(' — ')),
       line('🌐', room.browser_id && `Browser ID : ${room.browser_id}${browsers.length
         && !browsers.some((item) => item.browser_id === room.browser_id) ? ' ⚠️ inconnu de Browser Mod' : ''}`),

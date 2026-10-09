@@ -14,6 +14,7 @@ import { entityPicker } from './picker.js';
 export const openForm = ({ title, values, fields, entities, onSave }) => {
   const draft = structuredClone(values);
   const errors = new Set();
+  const showAll = new Set();
   const body = h('div', { class: 'modal-body' });
   const overlay = h('div', { class: 'modal-overlay' });
 
@@ -27,12 +28,20 @@ export const openForm = ({ title, values, fields, entities, onSave }) => {
 
   const control = (spec) => {
     if (spec.kind === 'entity') {
-      return entityPicker({
-        entities,
+      // Filtre facultatif (ex. écrans) : l'entité déjà choisie reste toujours visible.
+      const filtered = spec.filter && !showAll.has(spec.key)
+        ? entities.filter((entity) => spec.filter(entity) || entity.entity_id === draft[spec.key]) : entities;
+      const picker = entityPicker({
+        entities: filtered,
         domains: spec.domainsFor ? spec.domainsFor(draft) : spec.domains,
         value: draft[spec.key], allowEmpty: Boolean(spec.allowEmpty),
         onChange: (entityId) => { draft[spec.key] = entityId; errors.delete(spec.key); render(); },
       });
+      if (!spec.filter) return picker;
+      return h('div', {}, picker, h('button', { type: 'button', class: 'link-button', onclick: () => {
+        if (showAll.has(spec.key)) showAll.delete(spec.key); else showAll.add(spec.key);
+        render();
+      } }, showAll.has(spec.key) ? spec.filterLabel || 'Seulement les entités probables' : 'Afficher toutes les entités'));
     }
     if (spec.kind === 'select') {
       return h('select', { class: 'modal-input', onchange: (event) => {

@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
 from . import models, schedule
-from .rooms import BUSY_STATE, choose_rooms, is_in_call, state_of
+from .rooms import BUSY_STATE, call_sensor_of, choose_rooms, is_in_call, state_of
 from .storage import Storage
 
 _LOGGER = logging.getLogger(__name__)
@@ -569,7 +569,7 @@ class Engine:
             new_state = (data.get("new_state") or {}).get("state")
             old_state = (data.get("old_state") or {}).get("state")
             for room in self.config["rooms"]:
-                if room.get("call_sensor") == entity:
+                if entity and call_sensor_of(room) == entity:
                     if new_state == BUSY_STATE and old_state != BUSY_STATE:
                         await self.show_call(room)
                     elif old_state == BUSY_STATE and new_state != BUSY_STATE:

@@ -103,3 +103,14 @@ def test_old_media_source_ids_are_migrated():
     assert node["media"]["content_id"] == "media-source://media_source/local/taskmanager/a b.mp4"
     again = models.clean_node(node)
     assert again["media"]["content_id"] == node["media"]["content_id"]
+
+
+def test_call_sensor_derived_from_extension_unless_forced():
+    from taskmanager.rooms import call_sensor_of, is_in_call
+    room = {"extension": "103"}
+    assert call_sensor_of(room) == "sensor.pjsip_103_103_state"
+    assert call_sensor_of({"extension": "103", "call_sensor": "sensor.autre"}) == "sensor.autre"
+    assert call_sensor_of({}) == ""
+    assert is_in_call(room, {"sensor.pjsip_103_103_state": {"state": "Busy"}})
+    assert not is_in_call(room, {"sensor.pjsip_103_103_state": {"state": "Not in use"}})
+    assert not is_in_call({}, {"": {"state": "Busy"}})

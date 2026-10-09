@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+- **Capteur d'appel déduit de l'extension SIP** : `sensor.pjsip_<ext>_<ext>_state` est utilisé automatiquement. Le champ « Capteur d'appel (avancé, facultatif) » reste pour forcer un autre capteur (les pièces déjà configurées gardent leur valeur). La liste des pièces affiche ⚠️ si le capteur n'existe pas dans HA.
+- **Écran** : la liste ne propose que les entités dont le nom contient « screen » ou « ecran » (lien « Afficher toutes les entités » pour contourner).
+
 ## 0.8.1
 - **Browser ID choisi dans une liste** : le champ de la pièce propose les navigateurs enregistrés dans Browser Mod (lus dans le registre des appareils de HA) au lieu d'une saisie libre. Un ID inconnu de Browser Mod est signalé par ⚠️ dans le formulaire et dans la liste des pièces (une faute de frappe empêche le popup d'appel de s'ouvrir). Si la liste est indisponible, la saisie manuelle reste possible.
 

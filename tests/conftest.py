@@ -48,7 +48,9 @@ class FakeHa:
         self.published.append((entity_id, state, attributes))
 
     async def calendar_events(self, entity_id, start, end):
-        return [{"summary": "Médecin", "start": {"dateTime": "2026-10-08T10:00:00+02:00"}}]
+        from datetime import date, timedelta  # demain : le test ne dépend pas de la date du jour
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        return [{"summary": "Médecin", "start": {"dateTime": f"{tomorrow}T10:00:00+02:00"}}]
 
     async def call_service(self, domain, service, data):
         self.calls.append((domain, service, data))

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+- **Vidéo + question** : positionnement explicite des fenêtres (vidéo en haut sur 80 % de l'écran, boutons en bas sur le reste), pleine largeur, en cumulant plusieurs mécanismes CSS pour s'adapter à la version de HA / browser_mod.
+- **Question seule** : fenêtre centrée au milieu de l'écran.
+- **Boutons OUI / NON** : icônes et libellés en blanc, libellés plus grands.
+
 ## 0.7.1
 - Le titre « Gestionnaire de tâches » de la page est retiré (HA affiche déjà le sien) : les onglets passent en haut.
 

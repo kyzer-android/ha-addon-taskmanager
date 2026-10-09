@@ -30,50 +30,60 @@ VIDEO_TYPES = {
     "mp4": "video/mp4", "m4v": "video/mp4", "webm": "video/webm", "mkv": "video/x-matroska",
     "mov": "video/quicktime", "3gp": "video/3gpp",
 }
-# Question seule : tout est centré (horizontalement et verticalement).
-QUESTION_CENTER_STYLE = """ha-dialog {
-  --vertical-align-dialog: center;
-  --justify-action-buttons: center;
-  text-align: center;
-}
-.content, .container .content {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}"""
+def dialog_box_style(vertical: str, height: str = "", transparent: bool = False) -> str:
+    """Place la fenêtre browser_mod pleine largeur, en haut (`top`), en bas (`bottom`) ou au centre (`center`).
+
+    Plusieurs mécanismes cumulés (variables de ha-dialog, parties ::part, ancienne mwc-dialog) :
+    selon la version de HA / browser_mod, l'un ou l'autre est pris en compte.
+    """
+    margin = {"top": "0 0 auto 0", "bottom": "auto 0 0 0", "center": "auto"}[vertical]
+    align = {"top": "flex-start", "bottom": "flex-end", "center": "center"}[vertical]
+    size = f"height: {height} !important; max-height: {height} !important; min-height: 0 !important;" if height else ""
+    background = "--ha-dialog-surface-background: transparent; --mdc-dialog-surface-background: transparent;" if transparent else ""
+    return (
+        "ha-dialog {\n"
+        f"  --vertical-align-dialog: {align};\n"
+        "  --dialog-surface-margin-top: 0px;\n"
+        "  --dialog-surface-margin-bottom: 0px;\n"
+        "  --ha-dialog-width-md: 100vw;\n"
+        "  --ha-dialog-width-full: 100vw;\n"
+        "  --ha-dialog-max-width: 100vw;\n"
+        "  --ha-dialog-border-radius: 0px;\n"
+        "  --mdc-dialog-min-width: 100vw;\n"
+        "  --mdc-dialog-max-width: 100vw;\n"
+        f"  {background}\n"
+        "}\n"
+        "ha-dialog::part(dialog) {\n"
+        f"  margin: {margin} !important;\n"
+        "  width: 100vw !important;\n"
+        "  max-width: 100vw !important;\n"
+        f"  {size}\n"
+        "  border-radius: 0 !important;\n"
+        "}\n"
+        "ha-dialog::part(header) { display: none !important; }\n"
+        "ha-dialog .mdc-dialog__surface, ha-dialog .container, ha-dialog .content {\n"
+        f"  {size}\n"
+        "  padding: 0 !important;\n"
+        "  overflow: hidden !important;\n"
+        "}\n"
+    )
+
+
+# Question seule : fenêtre centrée à l'écran.
+QUESTION_CENTER_STYLE = dialog_box_style("center") + (
+    ".content, .container .content { display: flex; flex-direction: column; justify-content: center; }\n"
+)
 
 
 def video_top_style(base: str, percent: float) -> str:
     """Vidéo + question : la vidéo occupe le haut de l'écran (percent % de la hauteur)."""
-    return base + (
-        "ha-dialog {\n"
-        "  --vertical-align-dialog: flex-start;\n"
-        "  --dialog-surface-margin-top: 0px;\n"
-        "  --mdc-dialog-min-width: 100vw;\n"
-        "  --mdc-dialog-max-width: 100vw;\n"
-        f"  --mdc-dialog-max-height: {percent:g}vh;\n"
-        "}\n"
-        "ha-dialog .container, .content {\n"
-        f"  height: {percent:g}vh !important;\n"
-        "}\n"
-        "video { width: 100%; height: 100%; object-fit: contain; }\n"
-    )
+    return base + dialog_box_style("top", f"{percent:g}vh") + "video { width: 100%; height: 100%; object-fit: contain; }\n"
 
 
 def question_bottom_style(percent: float) -> str:
     """Boutons seuls, sous la vidéo : ils occupent le reste de l'écran."""
     rest = max(5.0, 100.0 - percent)
-    return (
-        "ha-dialog {\n"
-        "  --vertical-align-dialog: flex-end;\n"
-        "  --dialog-surface-margin-bottom: 0px;\n"
-        "  --mdc-dialog-min-width: 100vw;\n"
-        "  --mdc-dialog-max-width: 100vw;\n"
-        f"  --mdc-dialog-max-height: {rest:g}vh;\n"
-        "}\n"
-        f".content, .container .content {{ height: {rest:g}vh; padding: 0 !important; }}\n"
-    )
+    return dialog_box_style("bottom", f"{rest:g}vh", transparent=True)
 
 
 CALL_STYLES = """ha-dialog {
@@ -421,7 +431,10 @@ class Engine:
                 },
                 "card_mod": {"style": (
                     f"ha-card {{ height: {height}px; font-size: {font}px; font-weight: bold; "
-                    f"background: {color}; color: white; }}"
+                    f"background: {color}; color: white; --icon-primary-color: white; "
+                    f"--primary-text-color: white; --mdc-icon-size: {int(height * 0.45)}px; }} "
+                    f"ha-state-icon, ha-icon {{ color: white !important; }} "
+                    f".name, span.name {{ font-size: {font}px !important; color: white !important; }}"
                 )},
             }
 

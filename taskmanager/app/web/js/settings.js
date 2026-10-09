@@ -17,6 +17,10 @@ const SETTING_GROUPS = [
       help: 'Vidéo + question : la vidéo prend le haut de l\'écran, les boutons OUI / NON sont dessous (80 % par défaut).' },
     { key: 'question_button_height', label: 'Hauteur des boutons sous la vidéo', unit: 'pixels',
       help: 'Taille des boutons OUI / NON affichés sous la vidéo (90 par défaut). Seuls, ils restent énormes.' },
+    { key: 'video_question_mode', label: 'Affichage vidéo + question', kind: 'select',
+      options: [{ value: 'single', label: 'Un seul popup (vidéo en haut, boutons dessous)' },
+        { value: 'legacy', label: 'Ancien mode (deux popups, lecteur browser_mod)' }],
+      help: 'Garde « un seul popup ». L\'ancien mode ne sert qu\'à revenir en arrière en cas de souci sur une tablette.' },
     { key: 'grace_minutes', label: 'Retard toléré au lancement', unit: 'minutes',
       help: 'Une tâche manquée de moins que ce délai est quand même lancée (par exemple après un redémarrage).' },
   ] },
@@ -247,7 +251,11 @@ export const renderSettings = async (root) => {
 
   const settingField = (spec) => {
     const settings = config.settings;
-    const input = spec.kind === 'text'
+    const input = spec.kind === 'select'
+      ? h('select', { class: 'modal-input', onchange: (event) => { settings[spec.key] = event.target.value; } },
+        spec.options.map((option) => h('option', { value: option.value,
+          selected: (settings[spec.key] || spec.options[0].value) === option.value }, option.label)))
+      : spec.kind === 'text'
       ? h('input', { type: 'text', class: 'modal-input', value: settings[spec.key] || '',
         oninput: (event) => { settings[spec.key] = event.target.value; } })
       : h('div', { class: 'unit-input' },

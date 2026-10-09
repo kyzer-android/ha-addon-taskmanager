@@ -2,7 +2,9 @@
 import { api } from './api.js';
 import { h, clear, toast } from './dom.js';
 
-const REFRESH_MS = 30000;
+// Une seule actualisation, calée sur le changement de minute : données et heure du bandeau.
+const msToNextMinute = () => 60000 - (Date.now() % 60000) + 300;
+const clock = (date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
   'septembre', 'octobre', 'novembre', 'décembre'];
@@ -74,7 +76,7 @@ export const renderTablet = async (root, _context, _show, options = {}) => {
     const today = isoOf(now);
     view.append(
       h('div', { class: 'tablet-banner' },
-        `Aujourd'hui : ${WEEKDAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`),
+        `${WEEKDAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()} — ${clock(now)}`),
       days.length
         ? h('div', { class: 'tablet-days', style: `grid-template-columns: repeat(${count}, minmax(0, 1fr))` },
           days.slice(0, count).map((day, index) => dayBlock(day, now, day.date ? day.date === today : index === 0)))
@@ -82,16 +84,19 @@ export const renderTablet = async (root, _context, _show, options = {}) => {
   };
 
   const refresh = async () => {
-    if (!view.isConnected) { clearInterval(timer); observer.disconnect(); return; }
+    if (!view.isConnected) { clearTimeout(timer); observer.disconnect(); return; }
     try { data = await api.tablet(); } catch (error) { /* on garde l'affichage précédent */ }
     draw();
+    schedule();
   };
 
   const observer = new ResizeObserver((entries) => {
     const next = Math.round(entries[0].contentRect.width);
     if (next !== width) { width = next; draw(); }
   });
-  const timer = setInterval(refresh, REFRESH_MS);
+  let timer;
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, msToNextMinute()); };
   observer.observe(view);
   draw();
+  schedule();
 };

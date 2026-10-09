@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+- **Vidéo + question dans un seul popup** : la vidéo (80 % du haut de l'écran) et les boutons OUI / NON dessous sont dans le même popup plein écran. À la fin de la vidéo, la question (titre + gros boutons) prend toute la place, sans rien rouvrir. Le délai de réponse ne démarre qu'à la fin de la vidéo ; répondre pendant la vidéo l'arrête. La fin de lecture est lue directement sur la vidéo (plus de délai de ~25 s). Contrôles du lecteur masqués. L'ancien mode (deux popups) reste dans Configuration → Avancé → « Affichage vidéo + question » pour revenir en arrière.
+- Si la vidéo ne démarre pas (lecture automatique bloquée), la question seule s'affiche à sa place et un avertissement est noté au journal.
+- **Vue tablette** : le bandeau affiche `samedi 10 octobre 2026 — 14:32` (sans « Aujourd'hui »), en plus grand (36 px). Une seule actualisation par minute, calée sur le changement de minute : données et heure.
+
 ## 0.8.4
 - **Fini le double enregistrement** dans Configuration : le bouton « Enregistrer » des fenêtres (pièces, utilisateurs, entités) et « Supprimer » écrivent directement ; Calendriers, Vue tablette et chaque sous-partie d'Avancé ont leur propre bouton **Enregistrer** et un badge « ● non enregistré » ; le bouton du bas est supprimé.
 

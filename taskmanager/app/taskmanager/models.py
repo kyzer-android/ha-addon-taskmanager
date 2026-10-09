@@ -40,6 +40,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "video_style": DEFAULT_VIDEO_STYLE,
     "video_height_percent": 80,
     "question_button_height": 90,
+    "video_question_mode": "single",
     "calendar_entities": [],
     "calendar_refresh_minutes": 10,
     "media_max_mb": 500,

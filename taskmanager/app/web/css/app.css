@@ -326,7 +326,7 @@ details.panel[open] > summary { margin-bottom: var(--spacing-md); }
   --tablet-font-day: calc(35px * var(--tablet-scale, 1));
   --tablet-font-month: calc(25px * var(--tablet-scale, 1));
   --tablet-font-item: calc(30px * var(--tablet-scale, 1));
-  --tablet-font-banner: calc(28px * var(--tablet-scale, 1));
+  --tablet-font-banner: calc(36px * var(--tablet-scale, 1));
 }
 .tablet-view {
   display: flex; flex-direction: column; gap: var(--tablet-gap); min-height: 70vh;

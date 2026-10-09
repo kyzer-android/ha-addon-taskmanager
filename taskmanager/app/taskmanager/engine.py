@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable
 from zoneinfo import ZoneInfo
 
-from . import models, schedule
+from . import models, schedule, video_popup
 from .rooms import BUSY_STATE, call_sensor_of, choose_rooms, is_in_call, state_of
 from .storage import Storage
 
@@ -125,11 +125,19 @@ CALL_CARD_STYLE = """ha-card {
 }"""
 
 
+VIDEO_MAX_SECONDS = 1800  # garde-fou : une vidéo qui ne signale jamais sa fin ne bloque pas la question
+VIDEO_START_GRACE = 5  # secondes ajoutées au délai de démarrage (réveil de l'écran, chargement)
+
+
 @dataclass
 class PendingQuestion:
     rid: str
     rooms: list[dict[str, Any]]
     future: asyncio.Future = field(default_factory=lambda: asyncio.get_running_loop().create_future())
+    # Popup unique vidéo + question : pièces dont la vidéo tourne encore, et celles où elle a démarré.
+    pending_video: set[str] = field(default_factory=set)
+    started: set[str] = field(default_factory=set)
+    video_done: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 def normalize_answer(value: str) -> str:
@@ -491,32 +499,11 @@ class Engine:
                 else:
                     pq = PendingQuestion(rid=models.new_id("q"), rooms=rooms)
                     self.questions[pq.rid] = pq
-                    started = rooms
-                    playback: asyncio.Task | None = None
-                    # Vidéo + question : vidéo en haut, boutons moyens dessous, question entière après la vidéo.
-                    compact = has_media and media.get("kind") == "video"
-                    if has_media:
-                        started = await self._start_playback(rooms, media, compact)
-                        playback = asyncio.create_task(self._finish_playback(started, media))
-                        compact = compact and bool(started)
-                    await self._open_question(pq, question["text"], rooms, compact)
-                    try:
-                        if compact and playback:
-                            await asyncio.wait({pq.future, playback}, return_when=asyncio.FIRST_COMPLETED)
-                            if not pq.future.done():
-                                for room in rooms:
-                                    await self._close_popup(room, "question")
-                                await self._open_question(pq, question["text"], rooms, False)
-                        answered = await asyncio.wait_for(asyncio.shield(pq.future), seconds)
-                    except asyncio.TimeoutError:
-                        answered = None
-                    finally:
-                        self.questions.pop(pq.rid, None)
-                    await self._close_after_question(rooms, answered, stop_all=compact and not playback.done())
-                    if playback:
-                        # Les autres tablettes ont été arrêtées ; la vidéo de la tablette
-                        # qui a répondu se termine normalement avant de libérer l'écran.
-                        await asyncio.gather(playback, return_exceptions=True)
+                    if (has_media and media.get("kind") == "video"
+                            and self.settings.get("video_question_mode", "single") != "legacy"):
+                        answered = await self._ask_with_video(pq, rooms, question["text"], media, seconds)
+                    else:
+                        answered = await self._ask_two_popups(pq, rooms, question, media, has_media, seconds)
             if answered:
                 return "yes" if answered[0] == "oui" else "no"
             if attempt < attempts - 1:
@@ -526,6 +513,127 @@ class Engine:
         if (node.get("escalation") or {}).get("enabled"):
             await self._escalate(node["escalation"])
         return outcome
+
+    async def _ask_two_popups(self, pq: PendingQuestion, rooms: list[dict[str, Any]], question: dict[str, Any],
+                              media: dict[str, Any], has_media: bool, seconds: float) -> tuple[str, str] | None:
+        """Ancien mode : lecteur browser_mod + popup de question séparé (audio, ou vidéo en mode « legacy »)."""
+        answered: tuple[str, str] | None = None
+        started = rooms
+        playback: asyncio.Task | None = None
+        # Vidéo + question : vidéo en haut, boutons moyens dessous, question entière après la vidéo.
+        compact = has_media and media.get("kind") == "video"
+        if has_media:
+            started = await self._start_playback(rooms, media, compact)
+            playback = asyncio.create_task(self._finish_playback(started, media))
+            compact = compact and bool(started)
+        await self._open_question(pq, question["text"], rooms, compact)
+        try:
+            if compact and playback:
+                await asyncio.wait({pq.future, playback}, return_when=asyncio.FIRST_COMPLETED)
+                if not pq.future.done():
+                    for room in rooms:
+                        await self._close_popup(room, "question")
+                    await self._open_question(pq, question["text"], rooms, False)
+            answered = await asyncio.wait_for(asyncio.shield(pq.future), seconds)
+        except asyncio.TimeoutError:
+            answered = None
+        finally:
+            self.questions.pop(pq.rid, None)
+        await self._close_after_question(rooms, answered, stop_all=compact and not playback.done())
+        if playback:
+            # Les autres tablettes ont été arrêtées ; la vidéo de la tablette
+            # qui a répondu se termine normalement avant de libérer l'écran.
+            await asyncio.gather(playback, return_exceptions=True)
+        return answered
+
+    def video_event(self, rid: str, room_id: str, event: str) -> None:
+        """Signal du popup unique : la vidéo a démarré ou s'est terminée dans une pièce."""
+        pq = self.questions.get(rid)
+        if not pq:
+            return
+        if event == "started":
+            pq.started.add(room_id)
+        elif event == "ended":
+            pq.pending_video.discard(room_id)
+            if not pq.pending_video:
+                pq.video_done.set()
+
+    async def _open_video_question(self, pq: PendingQuestion, room: dict[str, Any], text: str,
+                                   url: str, mime: str) -> bool:
+        """Ouvre le popup unique (vidéo en haut, boutons dessous) sur une tablette."""
+        browser_id = self._browser_id(room)
+        if not browser_id:
+            return False
+        try:
+            await self._ensure_screen(room)
+            await self.ha.call_service("browser_mod", "popup", {
+                "browser_id": [browser_id],
+                "tag": "video",
+                "initial_style": "fullscreen",
+                "dismissable": False,
+                "popup_styles": [{"style": "all", "styles": video_popup.POPUP_STYLES}],
+                "content": video_popup.build_html(
+                    url=url, mime=mime, text=text, rid=pq.rid, room_id=room.get("id", ""),
+                    video_percent=float(self.settings.get("video_height_percent", 80)),
+                    button_height=int(float(self.settings.get("question_button_height", 90)))),
+            })
+            return True
+        except Exception as err:  # noqa: BLE001
+            self.log("warning", f"Vidéo + question impossibles sur « {room.get('name')} » : {err}")
+            return False
+
+    async def _video_watchdog(self, pq: PendingQuestion, rooms: list[dict[str, Any]], text: str) -> None:
+        """Si la vidéo ne démarre pas (lecture automatique bloquée), la question seule prend le relais."""
+        await asyncio.sleep(float(self.settings.get("start_timeout_seconds", 10)) + VIDEO_START_GRACE)
+        for room in rooms:
+            room_id = room.get("id", "")
+            if room_id in pq.started or room_id not in pq.pending_video:
+                continue
+            self.log("warning", f"La vidéo n'a pas démarré sur « {room.get('name')} » : question seule")
+            await self._close_popup(room, "video")
+            await self._open_question(pq, text, [room], False)
+            self.video_event(pq.rid, room_id, "ended")
+
+    async def _ask_with_video(self, pq: PendingQuestion, rooms: list[dict[str, Any]], text: str,
+                              media: dict[str, Any], seconds: float) -> tuple[str, str] | None:
+        """Vidéo + question dans un seul popup ; le délai de réponse démarre à la fin de la vidéo."""
+        info: dict[str, str] | None = None
+        try:
+            info = await self.ha.resolve_media(media["content_id"])
+        except Exception as err:  # noqa: BLE001
+            self.log("warning", f"Adresse de la vidéo introuvable ({err}) : question seule")
+        opened: list[dict[str, Any]] = []
+        if info and info.get("url"):
+            extension = media["content_id"].rsplit(".", 1)[-1].lower().split("?")[0]
+            mime = info.get("mime_type") or VIDEO_TYPES.get(extension, "video/mp4")
+            for room in rooms:
+                if await self._open_video_question(pq, room, text, info["url"], mime):
+                    opened.append(room)
+        pq.pending_video = {room.get("id", "") for room in opened}
+        answered: tuple[str, str] | None = None
+        watchdog: asyncio.Task | None = None
+        try:
+            if not opened:
+                await self._open_question(pq, text, rooms, False)
+            else:
+                watchdog = asyncio.create_task(self._video_watchdog(pq, opened, text))
+                waiter = asyncio.ensure_future(pq.video_done.wait())
+                try:
+                    await asyncio.wait({pq.future, waiter}, return_when=asyncio.FIRST_COMPLETED,
+                                       timeout=VIDEO_MAX_SECONDS)
+                finally:
+                    waiter.cancel()
+            answered = await asyncio.wait_for(asyncio.shield(pq.future), seconds)
+        except asyncio.TimeoutError:
+            answered = None
+        finally:
+            if watchdog:
+                watchdog.cancel()
+            self.questions.pop(pq.rid, None)
+            for room in rooms:
+                await self._close_popup(room, "question")
+                await self._close_popup(room, "video")
+        return answered
 
     async def _close_after_question(self, rooms: list[dict[str, Any]], answered: tuple[str, str] | None,
                                     stop_all: bool = False) -> None:
@@ -578,6 +686,8 @@ class Engine:
             parts = str(data.get("message", "")).split(ANSWER_SEPARATOR)
             if len(parts) == 4 and parts[0] == "answer":
                 self.submit_answer(parts[1], parts[3], source="bouton", room_id=parts[2])
+            elif len(parts) == 4 and parts[0] == "video":
+                self.video_event(parts[1], parts[2], parts[3])
 
     async def show_call(self, room: dict[str, Any]) -> None:
         """Appel entrant : ferme la vidéo et la question, puis ouvre la Call Card."""

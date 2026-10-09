@@ -44,6 +44,13 @@ class FakeHa:
     async def get_config(self):
         return {"time_zone": "Europe/Paris"}
 
+    resolve_fails = False
+
+    async def resolve_media(self, content_id):
+        if self.resolve_fails:
+            raise RuntimeError("unknown_media_source")
+        return {"url": "/media/local/x.mp4?authSig=t", "mime_type": "video/mp4"}
+
     async def set_state(self, entity_id, state, attributes):
         self.published.append((entity_id, state, attributes))
 

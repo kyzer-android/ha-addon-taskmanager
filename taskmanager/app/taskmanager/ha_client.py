@@ -160,6 +160,11 @@ class HaClient:
             }
         return info
 
+    async def resolve_media(self, content_id: str) -> dict[str, str]:
+        """Adresse lisible par la tablette d'un média (adresse signée, valable 1 h) : {url, mime_type}."""
+        result = await self.ws_call("media_source/resolve_media", media_content_id=content_id, expires=3600)
+        return {"url": str(result.get("url") or ""), "mime_type": str(result.get("mime_type") or "")}
+
     async def browsers(self) -> list[dict[str, str]]:
         """Navigateurs enregistrés dans Browser Mod : [{browser_id, name}] (vide si indisponible).
 

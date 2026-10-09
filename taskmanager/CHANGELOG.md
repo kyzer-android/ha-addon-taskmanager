@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+- **Créateur — sous-tâches** : corrige la sélection. Un clic (ou la saisie) dans le titre d'une tâche / sous-tâche la sélectionne ; une sous-tâche nouvellement créée est sélectionnée automatiquement, donc les tuiles (audio, vidéo, question, sous-tâche) s'ajoutent bien dedans et les sous-tâches peuvent s'empiler. Carte sélectionnée bien visible (fond bleu, bordure épaisse) et bandeau « Les tuiles s'ajoutent dans : … ».
+- **Créateur — heure** : champ à saisie directe (`0810` devient `08:10`), sans sélecteur à roue, clavier numérique sur mobile.
+
 ## 0.9.1
 - **Nouveau déclencheur de sous-tâche « Après un délai »** : minutes + secondes (5 min par défaut), compté à partir de la fin de la tâche parente (après la vidéo / la réponse), quelle que soit la réponse. Plusieurs minuteurs sur un même parent démarrent ensemble (non cumulés). La tâche reste « en cours » jusqu'à la fin des minuteurs ; un redémarrage de l'add-on les perd.
 - **Sous-tâche « Tant qu'un capteur est actif »** : la liste des capteurs ne propose plus que les entités du Catalogue d'entités (Configuration), avec leur nom. Catalogue vide : un message invite à demander à un administrateur de l'alimenter.

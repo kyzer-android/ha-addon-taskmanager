@@ -76,13 +76,29 @@ export const renderCreator = async (root, context, show) => {
     } else if (tileId === 'question') {
       node.question = node.question || { text: 'Tout va bien ?', repeats: 0, delay_minutes: 5 };
     } else if (tileId === 'subtask') {
+      const sub = newNode('Sous-tâche');
       node.children.push({
         trigger: node.question ? 'yes' : 'sensor',
         sensor: { entity_id: '', state: 'on', repeat_minutes: 10 },
         timer: { seconds: 300 },
-        node: newNode('Sous-tâche'),
+        node: sub,
       });
+      return sub.id; // la nouvelle sous-tâche devient la carte sélectionnée
     }
+    return node.id;
+  };
+
+  const bannerText = () => {
+    const target = draft && findNode(draft.root, selectedId);
+    return target ? `Les tuiles s'ajoutent dans : ${target.title || 'Sans titre'}` : '';
+  };
+
+  // Sélection sans redessiner : un champ en cours de saisie ne doit pas être remplacé.
+  const select = (id) => {
+    selectedId = id;
+    page.querySelectorAll('.node-card').forEach((card) => card.classList.toggle('is-selected', card.dataset.nodeId === id));
+    const banner = page.querySelector('.selection-banner');
+    if (banner) banner.textContent = bannerText();
   };
 
   const dropOn = (event, node) => {
@@ -91,16 +107,14 @@ export const renderCreator = async (root, context, show) => {
     const tileId = event.dataTransfer.getData('text/plain');
     if (!TILES.some((tile) => tile.id === tileId)) return;
     if (!draft) draft = newTask();
-    applyTile(node || draft.root, tileId);
-    selectedId = (node || draft.root).id;
+    selectedId = applyTile(node || draft.root, tileId);
     draw();
   };
 
   const tapTile = (tileId) => {
     if (!draft) draft = newTask();
     const target = findNode(draft.root, selectedId) || draft.root;
-    applyTile(target, tileId);
-    selectedId = target.id;
+    selectedId = applyTile(target, tileId);
     draw();
   };
 
@@ -271,13 +285,13 @@ export const renderCreator = async (root, context, show) => {
     renderNode(child.node, false));
 
   const renderNode = (node, isRoot) => {
-    const card = h('div', { class: `node-card ${selectedId === node.id ? 'is-selected' : ''}`,
+    const card = h('div', { class: `node-card ${selectedId === node.id ? 'is-selected' : ''}`, 'data-node-id': node.id,
       ondragover: (event) => { event.preventDefault(); event.stopPropagation(); card.classList.add('is-over'); },
       ondragleave: () => card.classList.remove('is-over'),
       ondrop: (event) => dropOn(event, node),
       onclick: (event) => {
         event.stopPropagation();
-        selectedId = node.id;
+        select(node.id);
         // Un clic sur un champ ne doit pas redessiner la carte : le champ serait remplacé avant d'avoir réagi.
         if (event.target.closest('input, select, textarea, button, label, video, audio')) return;
         draw();
@@ -289,12 +303,39 @@ export const renderCreator = async (root, context, show) => {
             if (isRoot) { draft.title = event.target.value; node.title = event.target.value; }
             else node.title = event.target.value;
             refreshSaveState();
+            const banner = page.querySelector('.selection-banner');
+            if (banner) banner.textContent = bannerText();
           },
-          onclick: (event) => event.stopPropagation() }))),
+          onfocus: () => select(node.id),
+          onclick: (event) => { event.stopPropagation(); select(node.id); } }))),
     node.media.kind !== 'none' ? mediaBlock(node) : null,
     node.question ? questionBlock(node) : null,
     node.children.map((child, index) => childBlock(node, child, index)));
     return card;
+  };
+
+  // Saisie directe « 0810 » -> « 08:10 » : pas de sélecteur à roue, clavier numérique sur mobile.
+  const timeInput = (sched) => {
+    const input = h('input', { type: 'text', inputmode: 'numeric', maxlength: 5, placeholder: 'HH:MM',
+      autocomplete: 'off', value: sched.time, class: 'time-input' });
+    const format = (raw) => {
+      const digits = raw.replace(/\D/g, '').slice(0, 4);
+      return digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits;
+    };
+    input.addEventListener('input', () => {
+      input.value = format(input.value);
+      sched.time = /^([01]\d|2[0-3]):[0-5]\d$/.test(input.value) ? input.value : '';
+      refreshSaveState();
+    });
+    input.addEventListener('blur', () => {
+      const digits = input.value.replace(/\D/g, '');
+      if (digits.length === 1 || digits.length === 2) input.value = `${digits.padStart(2, '0')}:00`;
+      if (digits.length === 3) input.value = `0${digits[0]}:${digits.slice(1)}`;
+      if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)) sched.time = input.value;
+      else { input.value = sched.time || ''; }
+    });
+    input.addEventListener('focus', () => input.select());
+    return input;
   };
 
   const scheduleForm = () => {
@@ -304,7 +345,7 @@ export const renderCreator = async (root, context, show) => {
         field('Type', h('select', { onchange: (event) => { sched.type = event.target.value; draw(); } },
           h('option', { value: 'daily', selected: sched.type === 'daily' }, 'Journalière'),
           h('option', { value: 'once', selected: sched.type === 'once' }, 'Unique (un jour précis)'))),
-        field('Heure', h('input', { type: 'time', value: sched.time, oninput: bind(sched, 'time') })),
+        field('Heure', timeInput(sched)),
         sched.type === 'once' ? field('Date', h('input', { type: 'date', value: sched.date, oninput: bind(sched, 'date') })) : null),
       sched.type === 'daily' ? h('div', { class: 'row' },
         DAY_LABELS.map((label, index) => h('button', {
@@ -331,7 +372,7 @@ export const renderCreator = async (root, context, show) => {
     const { root: node, schedule: sched } = draft;
     const hasContent = (node.media.kind !== 'none' && node.media.content_id) || node.question;
     const scheduleOk = sched.type === 'once' ? Boolean(sched.date) : sched.days.length > 0;
-    return Boolean(draft.title.trim()) && Boolean(hasContent) && scheduleOk;
+    return Boolean(draft.title.trim()) && Boolean(hasContent) && scheduleOk && Boolean(sched.time);
   };
 
   let saveButton = null;
@@ -407,6 +448,7 @@ export const renderCreator = async (root, context, show) => {
       h('section', { class: 'panel' },
         h('h2', { class: 'panel-title' }, isEdit ? 'Modifier la tâche' : 'Créateur de tâches'),
         h('p', { class: 'hint' }, 'Glissez les tuiles sur le canvas. Sur téléphone, touchez une tuile : elle s\'ajoute à la carte sélectionnée.'),
+        h('p', { class: 'selection-banner' }, bannerText()),
         h('div', { class: 'palette' }, TILES.map((tile) => h('div', {
           class: `tile ${tile.cls}`, draggable: true,
           ondragstart: (event) => event.dataTransfer.setData('text/plain', tile.id),

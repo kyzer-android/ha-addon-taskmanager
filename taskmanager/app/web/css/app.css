@@ -7,6 +7,7 @@
   --color-muted: #6b7785;
   --color-border: #d5dbe1;
   --color-primary: #1976d2;
+  --color-selected-bg: #e3f0fc;
   --color-primary-dark: #115293;
   --color-danger: #c62828;
   --color-success: #2e7d32;
@@ -193,7 +194,9 @@ input[type="checkbox"] { width: 22px; height: 22px; }
   margin-bottom: var(--spacing-md);
   background: var(--color-surface);
 }
-.node-card.is-selected { border-color: var(--color-primary); }
+.node-card.is-selected { border-color: var(--color-primary); border-width: 3px; background: var(--color-selected-bg); }
+.selection-banner { margin: 0 0 var(--spacing-sm); font-weight: 600; color: var(--color-primary-dark); min-height: 1.4em; }
+.time-input { width: 6em; text-align: center; font-variant-numeric: tabular-nums; }
 .node-card.is-over { background: #eef5fd; }
 .node-block { border-left: 5px solid var(--color-border); padding-left: var(--spacing-md); margin: var(--spacing-sm) 0; }
 .node-block-video { border-left-color: var(--color-video); }
